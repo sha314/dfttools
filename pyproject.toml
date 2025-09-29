@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dfttools"
+version = "0.1.0"
+description = "Extracting data from Quantum Espresso input/output files in similar format to that of materials project api. Analyzing/comparing"
+authors = [
+  { name="M. Shahnoor Rahman", email="shahnoor3pl@gmail.com" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+dependencies = [
+  "numpy>=1.22",     
+  "matplotlib>=3.6" 
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

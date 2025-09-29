@@ -1,0 +1,4 @@
+*png
+*pyc
+dfttools/dfttools.egg-info/*
+tmp/*
