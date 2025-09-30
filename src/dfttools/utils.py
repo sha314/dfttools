@@ -109,7 +109,7 @@ def clean_up_branch_data(branch_list):
     #Looping through paths and stripping info
     prev_line = None
     index_counter = 0  
-
+    name_list = []
     for line in branch_list:
         # print(line)
         if line[-1] == gamma:
@@ -125,12 +125,16 @@ def clean_up_branch_data(branch_list):
                             'end_index': index_counter + segment_length - 1
                         }
                         #print(branch_dict)
-                branch_data_clean['branches'].append(branch_dict)
                 index_counter = branch_dict['end_index'] + 1
+                if branch_dict['name'] not in name_list:
+                    name_list.append(branch_dict['name'])
+                    branch_data_clean['branches'].append(branch_dict)
+                
             else:
                     None
         prev_line = line
         pass
+    print("branch_data_clean ", branch_data_clean)
     return branch_data_clean
 
 
