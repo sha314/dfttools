@@ -207,7 +207,7 @@ def parse_bands_file(filename):
         pass
 
 
-    ebands = np.array(eband_list)
+    ebands = np.array(eband_list).T
     kpoints = np.array(kpoint_list)
 
     # print(ebands.shape)
@@ -270,6 +270,14 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
     # print(data["bands"].shape)
     return data
 
+def plot_dos(data, ax):
+    x, y = data['dos']
+    efermi = data['e_fermi']
+    ax.plot(x-efermi, y)
+
+
+    pass
+
 def plot_bands(loaded_data):
     print("plotting bands")
     branches=loaded_data['branches']
@@ -321,6 +329,14 @@ def plot_bands(loaded_data):
     plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
     plt.savefig("bands_branches.png")
 
+
+def read_dos_input_file():
+    """
+    TODO
+    """
+
+
+    pass
 
 
 if __name__=="__main__":
