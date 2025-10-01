@@ -282,56 +282,63 @@ def plot_dos(data, ax):
 
     pass
 
-def plot_bands(loaded_data):
+def plot_bands(data, filename, axesin=None):
+    """
+    loaded_data : data dictionary
+    filename    : filename of output image
+    """
     print("plotting bands")
-    branches=loaded_data['branches']
+    branches=data['branches']
     # branches
 
-    modified_branch = []
-    namelist = []
-    for b in branches:
-        if b['name'] in namelist:
-            continue
-        else:
-            namelist.append(b['name'])
-            modified_branch.append(b)
-            pass
-    branches = modified_branch
+    # modified_branch = []
+    # namelist = []
+    # for b in branches:
+    #     if b['name'] in namelist:
+    #         continue
+    #     else:
+    #         namelist.append(b['name'])
+    #         modified_branch.append(b)
+    #         pass
+    # branches = modified_branch
     # print("branches ", branches)
     width_ratios = list(map(lambda x: x['end_index']-x['start_index'], branches))
     # print(width_ratios)
-    fig, axes = plt.subplots(1, len(branches), figsize=(10, 6), sharey=True, gridspec_kw={"width_ratios": width_ratios}, dpi=200)
+    if axesin is None:
+        fig, axes = plt.subplots(1, len(branches), figsize=(10, 6), sharey=True, gridspec_kw={"width_ratios": width_ratios}, dpi=200)
+    else:
+        axes = axesin
+    if len(branches) != len(axes):
+        print("branch size and axes count does not match!! <<Warning>>")
+        pass
 
-    
     axes[0].set_ylabel(r"$E-E_F (eV)$")
-    ebands = np.array(loaded_data['bands']).T
-    # print("ebands.shape ", ebands.shape)
 
-    for i in range(9):
-        jj = i
-        kk = i
-
-        # print(loaded_data.keys())
         
-        # ebands = ebands[idx,]
+    # print(loaded_data.keys())
+    ebands = data['bands']
+    print("ebands.shape ", ebands.shape)
+    branches = data['branches']
+    efermi = data['e_fermi']
+    # ebands = ebands[idx,]
 
-        a , b = branches[jj]['start_index'], branches[jj]['end_index']
-        bands = ebands[:,a:b+1]
+    for i in range(len(branches)):
+        a , b = branches[i]['start_index'], branches[i]['end_index']
+        eb = ebands[:,a:b+1]
 
-        # print(bands.shape)
+        print(eb.shape)
 
-        x = np.linspace(0, 5, bands.shape[1])
+        x = np.linspace(0, 5, eb.shape[1])
         # print("efermi ", loaded_data['e_fermi'])
         # y = ebands.T - loaded_data['e_fermi']*(.997) # run 8
-        y = bands.T - loaded_data['e_fermi']*(1.005) 
+        y = eb.T - efermi
         # print(y.shape)
         axes[i].plot(x, y, 'k--')
-        pass
 
     plt.ylim(-1,1)
     plt.tight_layout() 
     plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
-    plt.savefig("bands_branches.png")
+    plt.savefig(filename)
 
 
 def read_dos_input_file():

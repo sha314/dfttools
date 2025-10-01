@@ -55,34 +55,35 @@ mp.get_material_info(material_id)
 
 
 fig, axes = mp.plot_bands()
+utils.plot_bands(data, "bands-combined.png", axesin=axes)
 
-# print(loaded_data.keys())
-ebands = data['bands']
-print("ebands.shape ", ebands.shape)
-branches = data['branches']
-efermi = data['e_fermi']
-# ebands = ebands[idx,]
+# # print(loaded_data.keys())
+# ebands = data['bands']
+# print("ebands.shape ", ebands.shape)
+# branches = data['branches']
+# efermi = data['e_fermi']
+# # ebands = ebands[idx,]
 
-for i in range(9):
-    a , b = branches[i]['start_index'], branches[i]['end_index']
-    eb = ebands[:,a:b+1]
+# for i in range(9):
+#     a , b = branches[i]['start_index'], branches[i]['end_index']
+#     eb = ebands[:,a:b+1]
 
-    print(eb.shape)
+#     print(eb.shape)
 
-    x = np.linspace(0, 5, eb.shape[1])
-    # print("efermi ", loaded_data['e_fermi'])
-    # y = ebands.T - loaded_data['e_fermi']*(.997) # run 8
-    y = eb.T - efermi
-    # print(y.shape)
-    axes[i].plot(x, y, 'k--')
+#     x = np.linspace(0, 5, eb.shape[1])
+#     # print("efermi ", loaded_data['e_fermi'])
+#     # y = ebands.T - loaded_data['e_fermi']*(.997) # run 8
+#     y = eb.T - efermi
+#     # print(y.shape)
+#     axes[i].plot(x, y, 'k--')
 
 
         
 
-plt.ylim(-1,1)
-plt.tight_layout() 
-plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
-plt.savefig("bands-combined")
+# plt.ylim(-1,1)
+# plt.tight_layout() 
+# plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
+# plt.savefig("bands-combined")
 
 # plt.show()
 
