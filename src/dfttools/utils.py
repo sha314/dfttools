@@ -9,8 +9,13 @@ import getpass
 ## Run the parse_file on your file then do any necessary post-processing
 
 def find_keywords(prev,line):
-    #Assumes that keywords will be "&...", "#..." or follow empty space or "/"
-    #If need to update formatting of keywords, change the if statements
+    """
+    Function that will find lines corresponding to keywords. Update the if
+    statements to add/remove keyword formatting. Current version assumes 
+    keywords will contain &,#,/ or previous line is empty. prev and line are
+    lines read from a file. 
+    """
+    
     if any("&" in s for s in line):
         return True
     if any("#" in s for s in line):
@@ -24,6 +29,13 @@ def find_keywords(prev,line):
 
 #Helper function to count number of lines with same string length 
 def get_data_length(i, lines):
+    """
+    Helper function that creates a list of the data following the keyword
+    by line, which are stripped and split. Returns new position in file
+    line reading (line number) and the data list. i is the position (line 
+    number) of the keyword and lines is the lines of data read following the 
+    keyword. 
+    """
     # print("get_data_length")
     start = i + 1
     while start < len(lines) and not lines[start].strip():
@@ -53,6 +65,13 @@ def get_data_length(i, lines):
 
 
 def read_keywords(lines, keywords, include_keyword):
+    """
+    Inputs are lines of text read from a file, a list of keywords (data type) 
+    to look for and a boolean to decide whether to include the keyword as the 
+    first entry of it's data list or not. Returns a dictionary with the 
+    keyword as the key and list of the lines of data as the value. The keyword
+    is converted in lowercase for normalization.
+    """
     data_blocks = {}
     i = 0
     #Will turn desired data into list of lists
@@ -103,6 +122,14 @@ def parse_file(file_path, keywords_list, include_keyword=False):
 
 
 def clean_up_branch_data(branch_list):
+    """
+    Function that contains certain post-processing which is unique to data 
+    of branches. Input is the unproccessed list and output is the clean version.
+
+    Replaces "Γ" with "\\Gamma"
+    Indexes bands by counting along paths
+    Removes any duplicate branches
+    """
     #Cleaning up branch_data
     branch_data_clean = {"branches":[]}
     gamma = 'Γ'
@@ -139,6 +166,14 @@ def clean_up_branch_data(branch_list):
 
 
 def clean_up_dos_data(dos_data_):
+    """
+    Function that contains certain post-processing which is unique to data 
+    of DOS. Input is the unproccessed list and output is the clean version.
+
+    Looks for fermi energy indicated by "e"
+    New version of data is dictionary with list of DOS data with key "dos" and
+    the fermi energy with key "e_fermi"
+    """
     #Cleaning dos & getting E-fermi#  
     dos_data_clean = {"dos":[], "e_fermi": None}
     for i, line in enumerate(dos_data_["e"]):
