@@ -6,7 +6,7 @@ from pymatgen.electronic_structure.plotter import BSPlotter, DosPlotter, BSDOSPl
 import matplotlib.pyplot as plt
 from pymatgen.electronic_structure.core import Spin
 import numpy as np
-
+from pymatgen.symmetry.bandstructure import HighSymmKpath
 
 
 class MPHelper:
@@ -150,8 +150,8 @@ class MPHelper:
         fig, axes = plt.subplots(1, len(self.bs.branches), figsize=(10, 6), sharey=True, gridspec_kw={"width_ratios": width_ratios}, dpi=200)
 
         axes[0].set_ylabel(r"$E-E_F (eV)$")
-
-        for i in range(9):
+        branch_count = len(self.bs.branches)
+        for i in range(branch_count):
             jj = i
             kk = i
             

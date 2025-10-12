@@ -103,6 +103,9 @@ def parse_file(file_path, keywords_list, include_keyword=False):
 
 
 def clean_up_branch_data(branch_list):
+    """
+    
+    """
     #Cleaning up branch_data
     branch_data_clean = {"branches":[]}
     gamma = 'Γ'
@@ -117,8 +120,9 @@ def clean_up_branch_data(branch_list):
 
         if prev_line is not None:
             segment_length = int(prev_line[-3])  
-            if segment_length != 0:
 
+            # segment_length == 1 means that the path doesn not contain any new path. already defined
+            if segment_length > 1:
                 branch_dict = {
                     'name': f"{prev_line[-1]}-{line[-1]}",
                             'start_index': index_counter,
@@ -296,17 +300,18 @@ def plot_bands(data, filename, axesin=None, fermi_factor=1.0):
     branches=data['branches']
     # branches
 
-    # modified_branch = []
-    # namelist = []
-    # for b in branches:
-    #     if b['name'] in namelist:
-    #         continue
-    #     else:
-    #         namelist.append(b['name'])
-    #         modified_branch.append(b)
-    #         pass
-    # branches = modified_branch
-    # print("branches ", branches)
+    modified_branch = []
+    namelist = []
+    for b in branches:
+        length = b['end_index'] - b['start_index']
+        if b['name'] in namelist or length <= 1:
+            continue
+        else:
+            namelist.append(b['name'])
+            modified_branch.append(b)
+            pass
+    branches = modified_branch
+    print("branches ", branches)
     width_ratios = list(map(lambda x: x['end_index']-x['start_index'], branches))
     # print(width_ratios)
     if axesin is None:
@@ -323,7 +328,6 @@ def plot_bands(data, filename, axesin=None, fermi_factor=1.0):
     # print(loaded_data.keys())
     ebands = data['bands']
     print("ebands.shape ", ebands.shape)
-    branches = data['branches']
     efermi = data['e_fermi']
     # ebands = ebands[idx,]
 
@@ -341,10 +345,10 @@ def plot_bands(data, filename, axesin=None, fermi_factor=1.0):
         # print(y.shape)
         axes[i].plot(x, y, 'k--')
 
-    plt.ylim(-1,1)
-    plt.tight_layout() 
-    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
-    plt.savefig(filename)
+    # plt.ylim(-1,1)
+    # plt.tight_layout() 
+    # plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
+    # plt.savefig(filename)
 
 
 def read_dos_input_file():
