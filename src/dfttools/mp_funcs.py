@@ -8,6 +8,7 @@ from pymatgen.electronic_structure.core import Spin
 import numpy as np
 
 
+
 class MPHelper:
     def __init__(self, api_key):
         self.api_key = api_key
@@ -22,7 +23,77 @@ class MPHelper:
             self.summary = mpr.summary.search(material_ids=material_id)
 
             self.docs = mpr.materials.search(material_ids=[material_id])
+
+            # Get the structure from Materials Project
+
+            # Create high-symmetry path object
+            self.kpath = HighSymmKpath(self.structure).kpath
+
+            # List of labels and coordinates
+            # print(kpath.kpath["kpoints"])
+
             pass
+         
+    def get_band_k_paths(self):
+        keys = self.kpath.kpath['kpoints'].keys()
+        lines = ""
+        for key in keys:
+            point = self.kpath.kpath['kpoints'][key]
+            count = 1
+            lines += " {:.6f}  {:.6f}  {:.6f}  {} ! {}\n".format(point[0], point[1], point[2], count, key)
+        return lines
+    
+
+    
+    def get_band_k_paths(self, factor=1):
+        path_dict = dict()
+        print(self.bs.branches)
+        print(self.kpath)
+        
+        for branch in self.bs.branches:
+            nkpt = branch['end_index'] - branch['start_index'] + 1
+            path_dict[branch['name']] = nkpt*factor
+            # print(branch['name'])
+            # name = branch['name'].split('-')
+            # print(name)
+            # print(nkpt*4)
+
+            
+        lines = []
+        for path in self.kpath['path']:
+            for i in range(len(path)):
+                point = self.kpath['kpoints'][path[i]]
+                
+                if (i+1) == len(path):
+                    # print("last element")
+                    nkpt = 1
+                else:
+                    key=path[i] + "-" + path[i+1]
+                    # print(key)
+                    # print(path_dict[key])
+                    nkpt = path_dict[key]
+                lines.append(r" {:.6f}  {:.6f}  {:.6f}  {}  !  {}".format(point[0], point[1], point[2], nkpt, path[i]))
+                # print(r" {:.6f}  {:.6f}  {:.6f}  {}  !  {}".format(point[0], point[1], point[2], nkpt, path[i]))
+                
+                pass
+        print("QE formated paths for bands computation --------")
+        for line in lines:
+            print(line)
+        
+        
+
+
+        pass
+
+
+
+    def get_braches(self):
+        return self.bs.branches
+        pass
+    
+    def get_branches_for_QE(self, factor):
+        return self.bs.branches
+
 
     def approx_mesh_size(self, delta_k=0.08):
         """
@@ -79,8 +150,8 @@ class MPHelper:
         fig, axes = plt.subplots(1, len(self.bs.branches), figsize=(10, 6), sharey=True, gridspec_kw={"width_ratios": width_ratios}, dpi=200)
 
         axes[0].set_ylabel(r"$E-E_F (eV)$")
-        n_branch = len(self.bs.branches)
-        for i in range(n_branch):
+
+        for i in range(9):
             jj = i
             kk = i
             
