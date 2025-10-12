@@ -28,13 +28,8 @@ class MPHelper:
         """
         delta_k = 0.08  # (1/Å)
         """
-        
 
         a,b,c = self.structure.lattice.abc
-
-        
-
-
 
         """Compute Monkhorst-Pack mesh sizes based on lattice constants and desired Δk (1/Å)."""
         kx = math.ceil((2 * math.pi) / (a * delta_k))
@@ -84,8 +79,8 @@ class MPHelper:
         fig, axes = plt.subplots(1, len(self.bs.branches), figsize=(10, 6), sharey=True, gridspec_kw={"width_ratios": width_ratios}, dpi=200)
 
         axes[0].set_ylabel(r"$E-E_F (eV)$")
-
-        for i in range(9):
+        n_branch = len(self.bs.branches)
+        for i in range(n_branch):
             jj = i
             kk = i
             

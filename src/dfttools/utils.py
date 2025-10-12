@@ -236,6 +236,9 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
                                     "ATOMIC_POSITIONS", 
                                     "K_POINTS"])
     
+    cell = nscf_data['cell_parameters']
+    print("lattice vector ", cell)
+
     # bands_data = parse_file(bands_path, ["plot"]) 
     branch_data = parse_file(bands_input_file, ["K_POINTS"]) 
     dos_data = parse_file(dos_data_file, ["E"], True) 
@@ -282,10 +285,12 @@ def plot_dos(data, ax):
 
     pass
 
-def plot_bands(data, filename, axesin=None):
+def plot_bands(data, filename, axesin=None, fermi_factor=1.0):
     """
     loaded_data : data dictionary
     filename    : filename of output image
+    axesin : matplotlib axis
+    fermi_factor : multiplicative factor to fermi energy to shift the bands
     """
     print("plotting bands")
     branches=data['branches']
@@ -331,7 +336,8 @@ def plot_bands(data, filename, axesin=None):
         x = np.linspace(0, 5, eb.shape[1])
         # print("efermi ", loaded_data['e_fermi'])
         # y = ebands.T - loaded_data['e_fermi']*(.997) # run 8
-        y = eb.T - efermi
+        # y = eb.T - efermi*1.005
+        y = eb.T - efermi*fermi_factor
         # print(y.shape)
         axes[i].plot(x, y, 'k--')
 
