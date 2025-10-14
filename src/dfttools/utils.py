@@ -240,8 +240,8 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
                                     "ATOMIC_POSITIONS", 
                                     "K_POINTS"])
     
-    cell = nscf_data['cell_parameters']
-    print("lattice vector ", cell)
+    # cell = nscf_data['cell_parameters']
+    # print("lattice vector ", cell)
 
     # bands_data = parse_file(bands_path, ["plot"]) 
     branch_data = parse_file(bands_input_file, ["K_POINTS"]) 
@@ -289,10 +289,9 @@ def plot_dos(data, ax):
 
     pass
 
-def plot_bands(data, filename, axesin=None, fermi_factor=1.0):
+def plot_bands(data, axesin=None, fermi_factor=1.0):
     """
     loaded_data : data dictionary
-    filename    : filename of output image
     axesin : matplotlib axis
     fermi_factor : multiplicative factor to fermi energy to shift the bands
     """
@@ -322,14 +321,19 @@ def plot_bands(data, filename, axesin=None, fermi_factor=1.0):
         print("branch size and axes count does not match!! <<Warning>>")
         pass
 
-    axes[0].set_ylabel(r"$E-E_F (eV)$")
-
+    
         
     # print(loaded_data.keys())
     ebands = data['bands']
     print("ebands.shape ", ebands.shape)
     efermi = data['e_fermi']
     # ebands = ebands[idx,]
+    axes[0].set_ylabel(r"$E-E_F (eV), E_F={} eV$".format(efermi))
+    if abs(fermi_factor - 1.0) > 1e-3:
+        print("Scaling fermi energy")
+        axes[0].set_ylabel(r"$E-E_F (eV), E_F={} * {}eV$".format(efermi, fermi_factor))
+        efermi *= fermi_factor
+        pass
 
     for i in range(len(branches)):
         a , b = branches[i]['start_index'], branches[i]['end_index']

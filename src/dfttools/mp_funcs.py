@@ -33,7 +33,13 @@ class MPHelper:
             # print(kpath.kpath["kpoints"])
 
             pass
-         
+    
+    def get_band_count(self):
+        from pymatgen.electronic_structure.core import Spin
+        print(self.bs.bands[Spin.up].shape)
+
+        pass
+
     def get_band_k_paths(self):
         keys = self.kpath.kpath['kpoints'].keys()
         lines = ""
