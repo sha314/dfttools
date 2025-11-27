@@ -2,9 +2,18 @@
 DFT Tools. Extracting data from Quantum Espresso input/output files in similar format to that of materials project api. Analyzing/comparing
 
 
+# Conda install 
+
+```
+conda create -n band python=3.10
+conda activate band
+conda install -c conda-forge pymatgen=2024.3.1 mp-api=0.43 emmet-core=0.84.2
+```
+
 
 # For developers
 ### Installing in editable mode
+Run from root directory of the repository
 ```
 pip install -e .
 ```

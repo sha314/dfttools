@@ -15,13 +15,18 @@ class MPHelper:
         pass
 
     def get_material_info(self, material_id):
+         self.material_id = material_id
          with MPRester(self.api_key) as mpr:
+            self.structure = mpr.get_structure_by_material_id(material_id, conventional_unit_cell=True)
+            print(" self.structure conventional ", self.structure )
             self.structure = mpr.get_structure_by_material_id(material_id)
+            print(" self.structure ", self.structure )
+            
             self.bs = mpr.get_bandstructure_by_material_id(material_id, line_mode=True)
             self.dos = mpr.get_dos_by_material_id(material_id)
             # Search by material ID or formula
             self.summary = mpr.summary.search(material_ids=material_id)
-
+            print(self.summary)
             self.docs = mpr.materials.search(material_ids=[material_id])
 
             # Get the structure from Materials Project
@@ -31,8 +36,31 @@ class MPHelper:
 
             # List of labels and coordinates
             # print(kpath.kpath["kpoints"])
-
+            self.asp_links = mpr.get_download_info([material_id])
+            print("asp_links ", self.asp_links)
             pass
+         
+    def get_task_doc(self, taskid):
+        with MPRester(api_key=self.api_key) as mpr:
+            tasks_doc = mpr.materials.tasks.search(
+                [taskid],           # task_id of this calculation
+                fields=["task_id", "orig_inputs", "calcs_reversed", "output", "last_updated"]
+            )
+            print(tasks_doc)
+        
+        
+    def get_vasprunxml(self):
+        print(self.asp_links[0].keys())
+        for key in self.asp_links[0].keys():
+            print(type(self.asp_links[0][key]))
+            for elm in self.asp_links[0][key]:
+                # print(elm)
+                # print(str(elm['calc_type']))
+                if "Uniform" in str(elm['calc_type']):
+                    print(elm)
+                
+                pass
+        print(self.asp_links[1])
     
     def get_band_count(self):
         from pymatgen.electronic_structure.core import Spin
@@ -150,6 +178,38 @@ class MPHelper:
         plotter_dos.add_dos("Total dos", self.dos)
         plotter_dos.get_plot()
 
+    def plot_bands_dos_png(self, out_dir, erange=(-2, 2), dos_max=20):
+        plotter=BSPlotter(self.bs)
+        plotter.get_plot()
+        plt.ylim(erange)
+        plt.axhline(y=0, color='r', linestyle='--', linewidth=2)
+        plt.savefig(out_dir + "{}-bands.png".format(self.material_id) )
+        # plotter.plot_brillouin()
+
+        # plotter.get_plot(ylim=(-5, 5))
+
+
+
+        plotter_dos = DosPlotter(sigma=0.01)
+        plotter_dos.add_dos("Total dos", self.dos)
+        plotter_dos.get_plot()
+
+        plt.ylim(0,dos_max)
+        plt.xlim(erange)
+        plt.savefig(out_dir + "{}-dos.png".format(self.material_id) )
+        
+
+        bsdos_plotter=BSDOSPlotter(bs_projection='elements', dos_projection='elements')
+        bsdos_plotter.get_plot(self.bs, dos=self.dos)
+        
+        plt.ylim(erange)
+        plt.savefig(out_dir + "{}-bands-dos.png".format(self.material_id) )
+
+
+        pass
+
+
+
     def plot_bands(self):
         width_ratios = list(map(lambda x: x['end_index']-x['start_index'], self.bs.branches))
         # print(width_ratios)
@@ -171,13 +231,16 @@ class MPHelper:
             x = np.linspace(0, 5, ebands.shape[1])
             y = ebands.T - self.bs.efermi
             # print(y.shape)
-            axes[i].plot(x, y, 'r-')
+            if i == branch_count-1:
+                label_line  = axes[i].plot(x, y, 'r-')
+            else:
+                axes[i].plot(x, y, 'r-')
             axes[i].set_xlabel(r"${}$".format(self.bs.branches[jj]['name']))
             axes[i].set_xlim(x[0], x[-1])
             axes[i].set_xticks([])
 
 
-        return fig, axes
+        return fig, axes, label_line
 
 
     def get_dos(self):
@@ -188,3 +251,30 @@ class MPHelper:
     
 
 
+if __name__ == "__main__":
+    with open("./api_key", 'r') as f:
+        api_key=f.readline()[:-1]
+        print(len(api_key))
+    pass
+
+    mp = MPHelper(api_key)
+    material_id = "mp-12627" # Nb3S4, hexagonal
+    # material_id = "mp-135"
+    # material_id = "mp-21008" # for cubic Ni3Ge
+
+    mp.get_material_info(material_id)
+
+    mp.get_band_k_paths(1)
+    mp.get_atomic_masses()
+    mp.get_atomic_positions()
+    mp.get_Cell_parameters()
+    mp.approx_mesh_size()
+    mp.get_band_count()
+
+
+    # Create a folder in "./tmp" named by material id?
+    # same the info as text file?
+    # save Bands, DoS, Bands+Dos as png image
+    # mp.plot_bands_dos_png("./tmp/")
+    
+    

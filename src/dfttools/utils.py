@@ -281,15 +281,25 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
     # print(data["bands"].shape)
     return data
 
-def plot_dos(data, ax):
-    x, y = data['dos']
+def plot_dos(data, axesin=None, fermi_factor=1.0):
+    print(type(data['dos']))
+    print(data['dos'].shape)
+    x, y = data['dos'].T
     efermi = data['e_fermi']
-    ax.plot(x-efermi, y)
+    
+    if abs(fermi_factor - 1.0) > 1e-3:
+        print("Scaling fermi energy")
+        axesin.set_xlabel(r"$E-E_F (eV), E_F={} * {}eV$".format(efermi, fermi_factor))
+        efermi *= fermi_factor
+        pass
+
+    axesin.plot(x-efermi, y)
+    axesin.set_ylabel(r"$??$")
 
 
     pass
 
-def plot_bands(data, axesin=None, fermi_factor=1.0):
+def plot_bands(data, axesin=None, fermi_factor=1.0,symbol_='k--', legend_label=None):
     """
     loaded_data : data dictionary
     axesin : matplotlib axis
@@ -347,12 +357,16 @@ def plot_bands(data, axesin=None, fermi_factor=1.0):
         # y = eb.T - efermi*1.005
         y = eb.T - efermi*fermi_factor
         # print(y.shape)
-        axes[i].plot(x, y, 'k--')
-
+        if i == len(branches)-1:
+            label_line = axes[i].plot(x, y, symbol_)
+        else:
+            axes[i].plot(x, y, symbol_)
+    
     # plt.ylim(-1,1)
     # plt.tight_layout() 
     # plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0, hspace=None)
     # plt.savefig(filename)
+    return label_line
 
 
 def read_dos_input_file():
