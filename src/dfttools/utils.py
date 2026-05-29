@@ -232,6 +232,8 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
     dos_data_file    : dos.dat file generted by dos post processing with command dos.x
     
     
+    returns : dictionary with keys ['bands', 'kpoints', 'atomic_species', 'cell_parameters',
+                 'atomic_positions', 'mesh_size', 'dos', 'e_fermi', 'branches']
     """
         
     #Retriving data from the 4 files
@@ -299,7 +301,7 @@ def plot_dos(data, axesin=None, fermi_factor=1.0):
 
     pass
 
-def plot_bands(data, axesin=None, fermi_factor=1.0,symbol_='k--', legend_label=None):
+def plot_bands(data, axesin=None, fermi_factor=1.0, symbol_='k--', legend_label=None):
     """
     loaded_data : data dictionary
     axesin : matplotlib axis
@@ -342,7 +344,6 @@ def plot_bands(data, axesin=None, fermi_factor=1.0,symbol_='k--', legend_label=N
     if abs(fermi_factor - 1.0) > 1e-3:
         print("Scaling fermi energy")
         axes[0].set_ylabel(r"$E-E_F (eV), E_F={} * {}eV$".format(efermi, fermi_factor))
-        efermi *= fermi_factor
         pass
 
     for i in range(len(branches)):
@@ -352,15 +353,17 @@ def plot_bands(data, axesin=None, fermi_factor=1.0,symbol_='k--', legend_label=N
         print(eb.shape)
 
         x = np.linspace(0, 5, eb.shape[1])
-        # print("efermi ", loaded_data['e_fermi'])
-        # y = ebands.T - loaded_data['e_fermi']*(.997) # run 8
-        # y = eb.T - efermi*1.005
+        print("efermi ", efermi, " factor ", fermi_factor)
         y = eb.T - efermi*fermi_factor
         # print(y.shape)
         if i == len(branches)-1:
             label_line = axes[i].plot(x, y, symbol_)
         else:
             axes[i].plot(x, y, symbol_)
+            pass
+        axes[i].set_xlabel(r"${}$".format(branches[i]['name']), fontsize=14)
+        axes[i].set_xlim(x[0], x[-1])
+        axes[i].set_xticks([])
     
     # plt.ylim(-1,1)
     # plt.tight_layout() 
