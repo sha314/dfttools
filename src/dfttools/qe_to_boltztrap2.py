@@ -32,13 +32,45 @@ import ase.dft.kpoints as asekp
 from BoltzTraP2.misc import TimerContext, dir_context, info, lexit, warning
 
 
-import compute
 
 Ha_to_eV = 27.211396132
 Ry_to_eV = 13.6057039763
 Ry_to_Ha = Ry_to_eV/Ha_to_eV
-Energy_Unit_Conv = 1.0
+Energy_Unit_Conv = 2.0
 
+def load_interpolation(dft_data_dir, bt2filnam, niter=1):
+    """
+    
+    """
+    if os.path.isfile(bt2filnam):
+        print("Loading the precalculated results from", bt2filnam)
+        data, equivalences, coeffs, metadata = serialization.load_calculation(
+            bt2filnam
+        )
+        print("done")
+
+
+
+    else:
+        print("No pregenerated bt2 file found; performing a new interpolation")
+        data = BTP.DFTData(dft_data_dir)
+        equivalences = sphere.get_equivalences(
+            data.atoms, data.magmom, niter * len(data.kpoints)
+        )
+        print(
+            "There are",
+            len(equivalences),
+            "equivalence classes in the output grid",
+        )
+        coeffs = fite.fitde3D(data, equivalences)
+        serialization.save_calculation(
+            bt2filnam,
+            data,
+            equivalences,
+            coeffs,
+            serialization.gen_bt2_metadata(data, data.mommat is not None),
+        )
+    return data, equivalences, coeffs
 
 
 
@@ -277,12 +309,6 @@ def write_energy_blocks(df, filepath):
 def compute_energy_files(qe_xml_file, out_dir, prefix, erange=()):
     """
     Compute .energy files for botlztrap2
-    bands are selected based on given energy range and then only those bands are written to files for all energy and k-point
-
-    qe_xml_file :
-    out_dir     :
-    prefix      : 
-    erange      : range of energy in eV and only those bands will be selected.
     
     """
 
@@ -312,15 +338,25 @@ def compute_energy_files(qe_xml_file, out_dir, prefix, erange=()):
         write_boltztrap_energy(df3, dir_name + "/{}_ib{}.energy".format(prefix, ib), ef)
         write_boltztrap_structure(dir_name + "/{}_ib{}.structure".format(prefix, ib), cell_vectors, atoms)
         pass
-    
 
-def plot_k_path(data_dir, btp_file, kpath=None, niter=1):
 
-    data, equivalences, coeffs = compute.load_interpolation(data_dir, btp_file, niter=niter)
+
+
+def plot_k_path(data_dir, btp_file, kpath=None, niter=1, unit_conv=1):
+    """
+
+    unit_conv : default 1 . If you want in eV then 
+    """
+
+    data, equivalences, coeffs = load_interpolation(data_dir, btp_file, niter=niter)
 
 
     if kpath is None:
-        kpath_list="[0.0,0.0,0.0], [0.0,0.0,0.5]"
+        # G-M-K-G-A-L-H-A-L-M-K-H
+        kpath_list="[0.0,0.0,0.0], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], " \
+        "[0.0,0.0,0.0], [0.0,0.0,0.5], [0.5,0.0,0.5], [0.333333,0.333333,0.5], " \
+        "[0.0,0.0,0.5], [0.5,0.0,0.5], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], [0.333333,0.333333,0.5]"
+        nkpoints_list=np.array([39, 23, 45, 94, 29, 23, 45, 1, 94, 1, 94, 1])*5
 
     # The second position alargument is first interpreted as a Python literal,
     # and after parsing it is cast to a NumPy array, which must have the right
@@ -353,7 +389,7 @@ def plot_k_path(data_dir, btp_file, kpath=None, niter=1):
         )
         info("k path #{}".format(ikpath + 1))
         # Generate the explicit point list.
-        band_path = asekp.bandpath(kpath, data.atoms.cell, nkpoints)
+        band_path = asekp.bandpath(kpath, data.atoms.cell, nkpoints_list[ikpath])
         if isinstance(band_path, asekp.BandPath):
             # For newer versions of ASE.
             kp = band_path.kpts
@@ -374,7 +410,7 @@ def plot_k_path(data_dir, btp_file, kpath=None, niter=1):
         # Create the plot
         nbands = egrid.shape[0]
         for i in range(nbands):
-            plt.plot(dkp, egrid[i, :], lw=2.0)
+            plt.plot(dkp, egrid[i, :]*unit_conv, lw=2.0)
         ticks += dcl.tolist()
         dividers += [dcl[0], dcl[-1]]
         offset = dkp[-1]
@@ -386,22 +422,41 @@ def plot_k_path(data_dir, btp_file, kpath=None, niter=1):
         plt.axvline(x=d, ls="-", lw=2.0)
     plt.axhline(y=0.0, lw=1.0)
     plt.ylabel(r"$\varepsilon - \varepsilon_F\;\left[\mathrm{Ha}\right]$")
-    plt.tight_layout()
     plt.ylim(-.05,.05)
+    if unit_conv != 1:
+        plt.ylabel(r"$\varepsilon - \varepsilon_F\;\left[\mathrm{Ha}\right]$" + "x{:.2f}".format(unit_conv))
+        plt.ylim((-.05*unit_conv,.05*unit_conv))
+        pass
+
+    plt.tight_layout()
+    
 
     plt.savefig("test.png")
     pass
 
 
 
+def plot_dos_TDF(data_dir, btp_file, kpath=None, niter=1):
+    n_bins = 1000
+    data, equivalences, coeffs = load_interpolation(data_dir, btp_file, niter=niter)
+    lattvec = data.get_lattvec()
+    eband, vvband, cband = fite.getBTPbands(
+        equivalences, coeffs, lattvec, curvature=False
+    )
+
+    Cepsilon, Cdos, Cvvdos, cdos = BL.BTPDOS(eband, vvband, npts=n_bins)
+
+
+    plt.plot((Cepsilon - data.fermi)/units.eV, Cdos*units.eV)
+    pass
+
+
+
 
 if __name__ == "__main__":
-    # Just as an example
-    compute_energy_files("./data-file-schema.xml", out_dir="./energy", prefix="test", erange=(-0.1,0.1))
-    plot_k_path("./energy/ib61", "./energy/ib61/test.bt2", niter=1)
-    plot_k_path("./energy/ib62", "./energy/ib62/test.bt2", niter=1)
-    plot_k_path("./energy/ib63", "./energy/ib63/test.bt2", niter=1)
-    plot_k_path("./energy/ib64", "./energy/ib64/test.bt2", niter=1)
+    # compute_energy_files("./data-file-schema.xml", out_dir="./energy", prefix="test", erange=(-0.1,0.1))
+    plot_k_path(".", "./test.bt2", niter=2, unit_conv=Ha_to_eV)
+
 
     pass
 
