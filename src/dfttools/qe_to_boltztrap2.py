@@ -341,15 +341,64 @@ def compute_energy_files(qe_xml_file, out_dir, prefix, erange=()):
 
 
 
+def get_bands_by_energy_from_interpolation(btp_file, out_dir, prefix, erange=()):
+    """
+    get bands in given energy range
 
-def plot_k_path(data_dir, btp_file, kpath=None, niter=1, unit_conv=1):
+    erange:
+    
     """
 
-    unit_conv : default 1 . If you want in eV then 
+    df, ef, nbnd, nks, cell_vectors, atoms = parse_qe_xml(qe_xml_file)
+    print(df.head(10))
+    print(df.dtypes)
+
+    write_boltztrap_structure(out_dir + "/{}.structure".format(prefix), cell_vectors, atoms)
+    
+
+
+    df2 = df[df["E_eV_relative"] < erange[1]]
+    df2 = df2[df2["E_eV_relative"] > erange[0]]
+
+    ib_idx = df2['ib'].unique()
+
+    df3 = df[df['ib'].isin(ib_idx)]
+
+    write_boltztrap_energy(df3, out_dir + "/{}.energy".format(prefix), ef)
+
+    for ib in ib_idx:
+        df3 = df[df['ib']== ib]
+        from pathlib import Path
+        dir_name = out_dir + "/ib{}".format(ib)
+        Path(dir_name).mkdir(exist_ok=True)
+        print(dir_name)
+        write_boltztrap_energy(df3, dir_name + "/{}_ib{}.energy".format(prefix, ib), ef)
+        write_boltztrap_structure(dir_name + "/{}_ib{}.structure".format(prefix, ib), cell_vectors, atoms)
+        pass
+
+def find_bands_in_e_range(data, equivalences, coeffs, erange):
+
+    pass
+
+
+
+
+
+def plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids=None, kpath=None, unit_conv=1):
     """
+    data, equivalences, coeffs : returned by interpolation method load_interpolation
 
-    data, equivalences, coeffs = load_interpolation(data_dir, btp_file, niter=niter)
+    band_ids : band ids of interest
+    kpath : a string of lists of k point. Default '[0.0,0.0,0.0], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], " \
+        "[0.0,0.0,0.0], [0.0,0.0,0.5], [0.5,0.0,0.5], [0.333333,0.333333,0.5], " \
+        "[0.0,0.0,0.5], [0.5,0.0,0.5], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], [0.333333,0.333333,0.5]' for patj
 
+    """
+    
+    if band_ids is not None:
+        # data_tmp.ebands = data.ebands[band_ids,:] # actual data is not needed because boltztrap interpolates using equivalences and coeffs
+        coeffs_tmp = coeffs[band_ids,:]
+        pass
 
     if kpath is None:
         # G-M-K-G-A-L-H-A-L-M-K-H
@@ -357,6 +406,11 @@ def plot_k_path(data_dir, btp_file, kpath=None, niter=1, unit_conv=1):
         "[0.0,0.0,0.0], [0.0,0.0,0.5], [0.5,0.0,0.5], [0.333333,0.333333,0.5], " \
         "[0.0,0.0,0.5], [0.5,0.0,0.5], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], [0.333333,0.333333,0.5]"
         nkpoints_list=np.array([39, 23, 45, 94, 29, 23, 45, 1, 94, 1, 94, 1])*5
+    else:
+        kpath_list = kpath[0]
+        nkpoints_list = kpath[1]
+        pass
+    
 
     # The second position alargument is first interpreted as a Python literal,
     # and after parsing it is cast to a NumPy array, which must have the right
@@ -402,7 +456,7 @@ def plot_k_path(data_dir, btp_file, kpath=None, niter=1, unit_conv=1):
         # Compute the band energies
         with TimerContext() as timer:
             egrid = fite.getBands(
-                kp, equivalences, data.get_lattvec(), coeffs
+                kp, equivalences, data.get_lattvec(), coeffs_tmp
             )[0]
             deltat = timer.get_deltat()
             info("rebuilding the bands took {:.3g} s".format(deltat))
@@ -432,7 +486,22 @@ def plot_k_path(data_dir, btp_file, kpath=None, niter=1, unit_conv=1):
     
 
     plt.savefig("test.png")
+
     pass
+
+
+def plot_k_path(data_dir, btp_file, band_ids, kpath=None, niter=1, unit_conv=1):
+    """
+
+    unit_conv : default 1 . If you want in eV then 
+    """
+
+    data, equivalences, coeffs = load_interpolation(data_dir, btp_file, niter=niter)
+
+    plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids, kpath, unit_conv)
+    
+    pass
+
 
 
 
