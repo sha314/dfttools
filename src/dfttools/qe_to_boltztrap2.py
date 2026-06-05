@@ -25,12 +25,13 @@ from BoltzTraP2.misc import ffloat
 import matplotlib.pyplot as plt
 import ast
 import itertools
-
 import matplotlib
 import ase.dft.kpoints as asekp
 
 from BoltzTraP2.misc import TimerContext, dir_context, info, lexit, warning
 
+
+from dfttools import compute, compute_TEP, smooth
 
 
 Ha_to_eV = 27.211396132
@@ -38,39 +39,6 @@ Ry_to_eV = 13.6057039763
 Ry_to_Ha = Ry_to_eV/Ha_to_eV
 Energy_Unit_Conv = 2.0
 
-def load_interpolation(dft_data_dir, bt2filnam, niter=1):
-    """
-    
-    """
-    if os.path.isfile(bt2filnam):
-        print("Loading the precalculated results from", bt2filnam)
-        data, equivalences, coeffs, metadata = serialization.load_calculation(
-            bt2filnam
-        )
-        print("done")
-
-
-
-    else:
-        print("No pregenerated bt2 file found; performing a new interpolation")
-        data = BTP.DFTData(dft_data_dir)
-        equivalences = sphere.get_equivalences(
-            data.atoms, data.magmom, niter * len(data.kpoints)
-        )
-        print(
-            "There are",
-            len(equivalences),
-            "equivalence classes in the output grid",
-        )
-        coeffs = fite.fitde3D(data, equivalences)
-        serialization.save_calculation(
-            bt2filnam,
-            data,
-            equivalences,
-            coeffs,
-            serialization.gen_bt2_metadata(data, data.mommat is not None),
-        )
-    return data, equivalences, coeffs
 
 
 
@@ -383,10 +351,9 @@ def find_bands_in_e_range(data, equivalences, coeffs, erange):
 
 
 
-
-def plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids=None, kpath=None, unit_conv=1):
+def plot_k_path_for_n_bands_ax(data, equivalences, coeffs, band_ids=None, kpath=None, unit_conv=1, axes=None, colors=None, shift_eV=0):
     """
-    data, equivalences, coeffs : returned by interpolation method load_interpolation
+    data, equivalences, coeffs : returned by interpolation method load_interpolation. Takes matplotlib axes as argument and plots there
 
     band_ids : band ids of interest
     kpath : a string of lists of k point. Default '[0.0,0.0,0.0], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], " \
@@ -394,18 +361,18 @@ def plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids=None, kpath=Non
         "[0.0,0.0,0.5], [0.5,0.0,0.5], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], [0.333333,0.333333,0.5]' for patj
 
     """
-    
+    coeffs_tmp = coeffs
     if band_ids is not None:
         # data_tmp.ebands = data.ebands[band_ids,:] # actual data is not needed because boltztrap interpolates using equivalences and coeffs
         coeffs_tmp = coeffs[band_ids,:]
         pass
-
+    nkpoints=5
     if kpath is None:
         # G-M-K-G-A-L-H-A-L-M-K-H
         kpath_list="[0.0,0.0,0.0], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], " \
         "[0.0,0.0,0.0], [0.0,0.0,0.5], [0.5,0.0,0.5], [0.333333,0.333333,0.5], " \
         "[0.0,0.0,0.5], [0.5,0.0,0.5], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], [0.333333,0.333333,0.5]"
-        nkpoints_list=np.array([39, 23, 45, 94, 29, 23, 45, 1, 94, 1, 94, 1])*5
+        nkpoints_list=np.array([39, 23, 45, 94, 29, 23, 45, 1, 94, 1, 94, 1])*nkpoints
     else:
         kpath_list = kpath[0]
         nkpoints_list = kpath[1]
@@ -419,26 +386,29 @@ def plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids=None, kpath=Non
     try:
         kpaths = ast.literal_eval(kpath_list)
     except ValueError:
-        exit("cannot be parsed as a Python literal")
+        print("cannot be parsed as a Python literal")
     if not isinstance(kpaths, list):
-        exit("cannot be parsed as a Python list")
+        print("cannot be parsed as a Python list")
     kpaths = [
         list(group)
         for k, group in itertools.groupby(kpaths, key=lambda x: x is not None)
         if k
     ]
 
-    nkpoints=100
+    
 
     kpaths = [np.array(i, dtype=np.float64) for i in kpaths]        
 
-    plt.figure()
-    ax = plt.gca()
+    if axes is None:
+        print("axes is None ")
+        return None
+        pass
+    ax_ = axes
     ticks = []
     dividers = []
     offset = 0.0
     for ikpath, kpath in enumerate(kpaths):
-        ax.set_prop_cycle(
+        ax_.set_prop_cycle(
             color=matplotlib.rcParams["axes.prop_cycle"].by_key()["color"]
         )
         info("k path #{}".format(ikpath + 1))
@@ -460,54 +430,72 @@ def plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids=None, kpath=Non
             )[0]
             deltat = timer.get_deltat()
             info("rebuilding the bands took {:.3g} s".format(deltat))
-        egrid -= data.fermi
+        egrid -= (data.fermi + shift_eV/Ha_to_eV)
         # Create the plot
         nbands = egrid.shape[0]
+        print(nbands)
         for i in range(nbands):
-            plt.plot(dkp, egrid[i, :]*unit_conv, lw=2.0)
+            if colors is None:
+                ax_.plot(dkp, egrid[i, :]*unit_conv, lw=2.0)
+            else:
+                ax_.plot(dkp, egrid[i, :]*unit_conv, lw=2.0, color=colors[i])
         ticks += dcl.tolist()
         dividers += [dcl[0], dcl[-1]]
         offset = dkp[-1]
-    ax.set_xticks(ticks)
-    ax.set_xticklabels([])
+    ax_.set_xticks(ticks)
+    ax_.set_xticklabels([])
     for d in ticks:
-        plt.axvline(x=d, ls="--", lw=0.5)
+        ax_.axvline(x=d, ls="--", lw=0.5)
     for d in dividers:
-        plt.axvline(x=d, ls="-", lw=2.0)
-    plt.axhline(y=0.0, lw=1.0)
-    plt.ylabel(r"$\varepsilon - \varepsilon_F\;\left[\mathrm{Ha}\right]$")
-    plt.ylim(-.05,.05)
+        ax_.axvline(x=d, ls="-", lw=2.0)
+    ax_.axhline(y=0.0, lw=1.0)
+    ax_.set_ylabel(r"$\varepsilon - \varepsilon_F\;\left[\mathrm{Ha}\right]$")
+    ax_.set_ylim(-.05,.05)
     if unit_conv != 1:
-        plt.ylabel(r"$\varepsilon - \varepsilon_F\;\left[\mathrm{Ha}\right]$" + "x{:.2f}".format(unit_conv))
-        plt.ylim((-.05*unit_conv,.05*unit_conv))
+        ax_.set_ylabel(r"$\varepsilon - \varepsilon_F\;\left[\mathrm{Ha}\right]$" + "x{:.2f}".format(unit_conv))
+        ax_.set_ylim((-.05*unit_conv,.05*unit_conv))
         pass
+    
+    return ax_
+
+
+def plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids=None, kpath=None, unit_conv=1):
+    """
+    data, equivalences, coeffs : returned by interpolation method load_interpolation
+
+    band_ids : band ids of interest
+    kpath : a string of lists of k point. Default '[0.0,0.0,0.0], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], " \
+        "[0.0,0.0,0.0], [0.0,0.0,0.5], [0.5,0.0,0.5], [0.333333,0.333333,0.5], " \
+        "[0.0,0.0,0.5], [0.5,0.0,0.5], [0.5, 0.0, 0.0], [0.333333,0.333333,0.0], [0.333333,0.333333,0.5]' for patj
+
+    """
+    plt.figure()
+    ax = plt.gca()
+    plot_k_path_for_n_bands_ax(data, equivalences, coeffs, band_ids=band_ids, kpath=kpath, unit_conv=unit_conv, axes=ax)
 
     plt.tight_layout()
+    plt.savefig("test.png")
     
 
-    plt.savefig("test.png")
-
-    pass
 
 
-def plot_k_path(data_dir, btp_file, band_ids, kpath=None, niter=1, unit_conv=1):
+def plot_k_path(data_dir, btp_file, niter=1, band_ids=None, kpath=None, unit_conv=1, axes=None):
     """
 
     unit_conv : default 1 . If you want in eV then 
     """
 
-    data, equivalences, coeffs = load_interpolation(data_dir, btp_file, niter=niter)
+    data, equivalences, coeffs = compute.load_interpolation(data_dir, btp_file, niter=niter)
 
-    plot_k_path_for_n_bands(data, equivalences, coeffs, band_ids, kpath, unit_conv)
+    return plot_k_path_for_n_bands_ax(data, equivalences, coeffs, band_ids, kpath, unit_conv, axes)
     
-    pass
 
 
 
 
 def plot_dos_TDF(data_dir, btp_file, kpath=None, niter=1):
     n_bins = 1000
-    data, equivalences, coeffs = load_interpolation(data_dir, btp_file, niter=niter)
+    data, equivalences, coeffs = compute.load_interpolation(data_dir, btp_file, niter=niter)
     lattvec = data.get_lattvec()
     eband, vvband, cband = fite.getBTPbands(
         equivalences, coeffs, lattvec, curvature=False
@@ -522,9 +510,391 @@ def plot_dos_TDF(data_dir, btp_file, kpath=None, niter=1):
 
 
 
+
+def compute_Szz_Sxx_v2(dft_data_dir, shift, ylimList, fig_name):
+
+
+    filename_DOS = dft_data_dir      + "Nb3S4_PBEsol_NCPP_QE_data_DOS.csv"
+    filename_TDF_CRTA = dft_data_dir +  "Nb3S4_PBEsol_NCPP_QE_data_TDF_CRTA.csv"
+    filename_TDF_IDOS = dft_data_dir +  "Nb3S4_PBEsol_NCPP_QE_data_TDF_IDOS.csv"
+
+    energy, DOS = np.loadtxt(filename_DOS, delimiter=',').T
+
+    energy1, TDF_xx_CRTA, TDF_yy_CRTA, TDF_zz_CRTA = np.loadtxt(filename_TDF_CRTA, delimiter=',').T
+
+    energy2, TDF_xx_IDOS, TDF_yy_IDOS, TDF_zz_IDOS = np.loadtxt(filename_TDF_IDOS, delimiter=',').T
+
+    Ep = shift/1000.
+    x, idx = compute_TEP.shift_and_clip(energy, Ep, erange=(-0.6, 0.6))
+    TDF_zz = TDF_zz_CRTA[idx]
+    TDF_xx = TDF_xx_CRTA[idx]
+    DOS_values = DOS[idx]
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10), dpi=200)
+    axes = axes.flatten()
+
+
+    ax = axes[0]
+    ax.plot(energy, DOS, label="DOS")
+    ax.plot(x, DOS_values, label="DOS, shifted")
+    ax.set_xlabel("(E-E_F-{}meV ) (eV)".format(Ep*1000))
+    ax.axvline(0, 0, 10, color='red')
+    ax.set_xlim([-0.4, 0.4])
+    ax.set_ylim(0, 8)
+    ax.legend()
+
+
+    ax = axes[1]
+    ax.plot(x, TDF_zz_IDOS[idx], label="TDF_zz_IDOS")
+    ax.plot(x, TDF_zz_CRTA[idx], label="TDF_zz_CRTA")
+
+    ax.plot(energy, -compute_TEP.dFD_dE(energy, 0, 300)/30, 'k--', label="-df/dE(T=300K)/30")
+    ax.axvline(0, 0, 10, color='red')
+    ax.set_xlabel("(E-E_F-{}meV ) (eV)".format(Ep*1000))
+    ax.set_ylabel("Shifted TDF")
+    ax.set_xlim([-0.4, 0.4])
+    ax.set_ylim(0, 1.5)
+    ax.legend()
+
+
+
+    ax = axes[2]
+    ax.plot(x, TDF_xx_IDOS[idx], label="TDF_xx_IDOS")
+    ax.plot(x, TDF_xx_CRTA[idx], label="TDF_xx_CRTA")
+
+    ax.plot(energy, -compute_TEP.dFD_dE(energy, 0, 300)/50, 'k--', label="-df/dE(T=300K)/50")
+    ax.axvline(0, 0, 10, color='red')
+    ax.set_xlabel("(E-E_F-{}meV ) (eV)".format(Ep*1000))
+    ax.set_ylabel("Shifted TDF")
+    ax.set_xlim([-0.4, 0.4])
+    ax.set_ylim(0, 0.3)
+    ax.legend()
+
+    # plot_k_path(dft_data_dir, dft_data_dir + "/test.bt2", None, axes=axes[3])
+    data, equivalences, coeffs = compute.load_interpolation(dft_data_dir, dft_data_dir + "test.bt2", niter=1)
+    plot_k_path_for_n_bands_ax(data, equivalences, coeffs, band_ids=None, kpath=None, unit_conv=Ha_to_eV, axes=axes[3])
+
+    # plot_k_path(dft_data_dir, dft_data_dir + "test.bt2", niter=1, band_ids=None, kpath=None, unit_conv=Ha_to_eV, axes=axes[3])
+    
+
+    ax = axes[4]
+    # ax.plot(Tzzdata, Szzdata, 'o', label="Experiment", alpha=0.6)
+
+
+
+    
+    Tlist = np.linspace(10, 400, 20)
+    SzzIDOS = compute_TEP.get_thermopower(x, TDF_zz_IDOS[idx], Tlist)
+    SzzCRTA = compute_TEP.get_thermopower(x, TDF_zz_CRTA[idx], Tlist)
+    ax.plot(Tlist, SzzIDOS*10**6, 'r--', label=r"$\mu(T)=0$ 1/DOS")
+    ax.plot(Tlist, SzzCRTA*10**6, 'g--', label=r"$\mu(T)=0$ CRTA")
+
+
+    # SzzIDOS = get_thermopower(x, TDF_zz_IDOS[idx], Tlist, mulist=muT(Tlist))
+    # SzzCRTA = get_thermopower(x, TDF_zz_CRTA[idx], Tlist, mulist=muT(Tlist))
+    # ax.plot(Tlist, SzzIDOS*10**6, 'r-', label=r"$\mu(T)$ 1/DOS")
+    # ax.plot(Tlist, SzzCRTA*10**6, 'g-', label=r"$\mu(T)$ CRTA")
+
+
+
+    ax.set_ylim(-60, 20)
+    ax.set_xlabel(r"Temperature (K)")
+    ax.set_ylabel(r"Thermopwoer, $S_{zz}\, \mu V/K$")
+    ax.legend()
+
+
+
+    ax = axes[5]
+    # ax.plot(T1xxdata, S1xxdata, 'o', label="Nb3S4-002-13", alpha=0.6)
+    # ax.plot(T2xxdata, S2xxdata, 'x', label="Nb3S4-3", alpha=0.6)
+
+        
+    Tlist = np.linspace(10, 400, 20)
+    SxxIDOS = compute_TEP.get_thermopower(x, TDF_xx_IDOS[idx], Tlist)
+    SxxCRTA = compute_TEP.get_thermopower(x, TDF_xx_CRTA[idx], Tlist)
+    ax.plot(Tlist, SxxIDOS*10**6, 'r--', label=r"$\mu(T)=0$ 1/DOS")
+    ax.plot(Tlist, SxxCRTA*10**6, 'g--', label=r"$\mu(T)=0$ CRTA")
+
+
+    # SxxIDOS = get_thermopower(x, TDF_xx_IDOS[idx], Tlist, mulist=muT(Tlist))
+    # SxxCRTA = get_thermopower(x, TDF_xx_CRTA[idx], Tlist, mulist=muT(Tlist))
+    # ax.plot(Tlist, SxxIDOS*10**6, 'r-', label=r"$\mu(T)$ 1/DOS")
+    # ax.plot(Tlist, SxxCRTA*10**6, 'g-', label=r"$\mu(T)$ CRTA")
+
+
+
+    # ax.set_ylim(-10, 120)
+
+    for i, ax in enumerate(axes):
+        ax.set_ylim(ylimList[i])
+        pass
+
+    ax.set_xlabel(r"Temperature (K)")
+    ax.set_ylabel(r"Thermopwoer, $S_{xx}\, \mu V/K$")
+    ax.legend()
+    return fig, axes
+    
+
+
+# Make data available globally
+T1xxdata, S1xxdata, T2xxdata, S2xxdata = np.loadtxt("Nb3S4-a-axis-thermopower.csv", delimiter=',', usecols=(0,1,2,3)).T
+Tzzdata, Szzdata = np.loadtxt("Nb3S4-c-axis-thermopower.txt").T
+
+
+def band_resolved_S_CRTA(shift, constC):
+    """
+    Requrements: ROOT_DIR contains .energy and .structure files for 4 bands and sub directories contains .energy and .structure files
+    for individual bands.
+
+    shift  : in meV of the fermi level
+    constC : contribution factor of electron like bands relative to hole like bands
+
+    
+    """
+    ROOT_DIR = "./PBEsol-Relaxed/energy/"
+
+    dir_dict = {
+        "4bands" : ROOT_DIR,
+        "ib61" : ROOT_DIR + "ib61/",
+        "ib62" : ROOT_DIR + "ib62/",
+        "ib63" : ROOT_DIR + "ib63/",
+        "ib64" : ROOT_DIR + "ib64/"
+    }
+
+    color_for_bands = ["red", "green", "blue", "orange"]
+    colors = {
+        "4bands" : "k",
+        "ib61" : color_for_bands[0],
+        "ib62" : color_for_bands[1],
+        "ib63" : color_for_bands[2],
+        "ib64" : color_for_bands[3]
+    }
+
+
+    sigma_param = 3
+    sigma_dict = {"segments": [0.08, 0.13], "sigma": [2, 4, 6]}
+
+    # sigma_dict = {"segments": [0.08], "sigma": [2, 5]}
+    Ep = shift/1000.
+    # Ep = 0.
+
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10), dpi=200)
+    axes = axes.flatten()
+
+
+    # plot_k_path(dft_data_dir, dft_data_dir + "/test.bt2", None, axes=axes[3])
+    data, equivalences, coeffs = compute.load_interpolation(ROOT_DIR, ROOT_DIR + "test.bt2", niter=1)
+    plot_k_path_for_n_bands_ax(data, equivalences, coeffs, band_ids=None, kpath=None, 
+                                                unit_conv=Ha_to_eV, axes=axes[3], colors=color_for_bands, shift_eV=Ep)
+
+    # plot_k_path(dft_data_dir, dft_data_dir + "test.bt2", niter=1, band_ids=None, kpath=None, unit_conv=Ha_to_eV, axes=axes[3])
+
+
+    axes[4].plot(Tzzdata, Szzdata, 'o', label="Experiment", alpha=0.6)
+    axes[5].plot(T1xxdata, S1xxdata, 'o', label="Nb3S4-002-13", alpha=0.6)
+    axes[5].plot(T2xxdata, S2xxdata, 'x', label="Nb3S4-3", alpha=0.6)
+
+    Tlist = np.linspace(10, 400, 20)
+
+    Sxx_sum = None
+    Szz_sum = None
+
+    onsgar_dict = dict()
+
+    for key in dir_dict:
+        dft_data_dir = dir_dict[key]
+
+        filename_DOS = dft_data_dir      + "Nb3S4_PBEsol_NCPP_QE_data_DOS.csv"
+        filename_TDF_CRTA = dft_data_dir +  "Nb3S4_PBEsol_NCPP_QE_data_TDF_CRTA.csv"
+        filename_TDF_IDOS = dft_data_dir +  "Nb3S4_PBEsol_NCPP_QE_data_TDF_IDOS.csv"
+
+        energy, DOS = np.loadtxt(filename_DOS, delimiter=',').T
+
+        energy1, TDF_xx_CRTA, TDF_yy_CRTA, TDF_zz_CRTA = np.loadtxt(filename_TDF_CRTA, delimiter=',').T
+
+        energy2, TDF_xx_IDOS, TDF_yy_IDOS, TDF_zz_IDOS = np.loadtxt(filename_TDF_IDOS, delimiter=',').T
+
+        
+        x, idx = compute_TEP.shift_and_clip(energy, Ep, erange=(-0.6, 0.6))
+        TDF_zz = TDF_zz_CRTA[idx]
+        TDF_xx = TDF_xx_CRTA[idx]
+        DOS_values = DOS[idx]
+
+
+        ax = axes[0]
+        # ax.plot(energy, smooth.gaussian_smooth_1d_reflected(DOS, sigma_param), label="{}".format(key))
+        # ax.plot(x, smooth.gaussian_smooth_1d_reflected(DOS_values, sigma_param), label="{}".format(key), color=colors[key])
+        ax.plot(x, smooth.segmented_gaussian_smooth_v2(x, DOS_values, sigma_dict)[0], label="{}".format(key), color=colors[key])
+
+
+        sigma_param = 6
+        # sigma_dict = {"segments": [0.01,], "sigma": [4, 8]}
+        ax = axes[1]
+        # ax.plot(x, smooth.gaussian_smooth_1d_reflected(TDF_zz_IDOS[idx], sigma_param), label="TDF_zz_IDOS")
+        ax.plot(x, smooth.gaussian_smooth_1d_reflected(TDF_zz_CRTA[idx], sigma_param), label="{}".format(key), color=colors[key])
+        # ax.plot(x, smooth.segmented_gaussian_smooth_v2(x, TDF_zz_CRTA[idx], sigma_dict)[0], label="{}".format(key), color=colors[key])
+
+        sigma_param = 4
+        ax = axes[2]
+        # ax.plot(x, smooth.gaussian_smooth_1d_reflected(TDF_xx_IDOS[idx], sigma_param), label="TDF_xx_IDOS")
+        ax.plot(x, smooth.gaussian_smooth_1d_reflected(TDF_xx_CRTA[idx], sigma_param), label="{}".format(key), color=colors[key])
+        # ax.plot(x, smooth.segmented_gaussian_smooth_v2(x, TDF_xx_CRTA[idx], sigma_dict)[0], label="{}".format(key), color=colors[key])
+
+
+        
+
+        ax = axes[4]
+        onsgar_zz = compute_TEP.get_OnsagerCoeff(x, TDF_zz_CRTA[idx], Tlist)
+        SzzCRTA = onsgar_zz[:,1]/onsgar_zz[:,0]/(-Tlist)
+        ax.plot(Tlist, SzzCRTA*10**6, label="{}".format(key), color=colors[key])
+
+
+
+        ax = axes[5]  
+        onsgar_xx = compute_TEP.get_OnsagerCoeff(x, TDF_xx_CRTA[idx], Tlist)
+        SxxCRTA = onsgar_xx[:,1]/onsgar_xx[:,0]/(-Tlist)
+        ax.plot(Tlist, SxxCRTA*10**6,  label="{}".format(key), color=colors[key])
+
+        if key != "4bands":
+            onsgar_dict[key] = {'zz':onsgar_zz, 'xx':onsgar_xx}
+            pass
+
+
+        if Sxx_sum is None:
+            Sxx_sum = SxxCRTA
+        else:
+            Sxx_sum += SxxCRTA
+
+        if Szz_sum is None:
+            Szz_sum = SzzCRTA
+        else:
+            Szz_sum += SzzCRTA
+
+        # ax.set_ylim(-10, 120)
+
+
+
+    pass
+
+
+    ax = axes[0]
+    ax.set_xlabel("(E-E_F-{}meV ) (eV)".format(Ep*1000))
+    ax.set_ylabel(r"DOS ($eV^{-1}$)")
+    ax.axvline(0, 0, 10, color='red')
+    ax.set_xlim([-0.4, 0.4])
+    ax.set_ylim(0, 8)
+    ax.legend()
+
+
+    ax = axes[1]
+    ax.plot(energy, -compute_TEP.dFD_dE(energy, 0, 300)/30, 'k--', label="-df/dE(T=300K)/30")
+    ax.axvline(0, 0, 10, color='red')
+    ax.set_xlabel("(E-E_F-{}meV ) (eV)".format(Ep*1000))
+    ax.set_ylabel(r"TDF_{zz}")
+    ax.set_xlim([-0.4, 0.4])
+    ax.set_ylim(0, 1.5)
+    ax.legend()
+
+
+    ax = axes[2]
+    ax.plot(energy, -compute_TEP.dFD_dE(energy, 0, 300)/50, 'k--', label="-df/dE(T=300K)/50")
+    ax.axvline(0, 0, 10, color='red')
+    ax.set_xlabel("(E-E_F-{}meV ) (eV)".format(Ep*1000))
+    ax.set_ylabel(r"$TDF_{xx}$")
+    ax.set_xlim([-0.4, 0.4])
+    ax.set_ylim(0, 0.3)
+    ax.legend()
+
+
+    ax = axes[3]
+    ax.set_xlabel("k-paths")
+    ax.legend()
+
+    tau_ratio = {
+        "ib61" : 1.0,
+        "ib62" : constC,
+        "ib63" : constC,
+        "ib64" : constC
+    }
+
+    onsgar_xx = None
+    onsgar_zz = None
+
+    for key in onsgar_dict.keys():
+        if onsgar_xx is None:
+            onsgar_xx = onsgar_dict[key]['xx']*tau_ratio[key]
+            onsgar_zz = onsgar_dict[key]['zz']*tau_ratio[key]
+            continue
+        onsgar_xx += onsgar_dict[key]['xx']*tau_ratio[key]
+        onsgar_zz += onsgar_dict[key]['zz']*tau_ratio[key]
+        pass
+
+    Szz = onsgar_zz[:,1]/onsgar_zz[:,0]/(-Tlist)
+    axes[4].plot(Tlist, Szz*10**6,  'o', label="ib61 + ib(62,63,64)*{}".format(constC), color=colors[key])
+
+
+    Sxx = onsgar_xx[:,1]/onsgar_xx[:,0]/(-Tlist)
+    axes[5].plot(Tlist, Sxx*10**6, 'o', label="ib61 + ib(62,63,64)*{}".format(constC), color=colors[key])
+
+
+    ax = axes[4]
+    ax.set_ylim(-60, 20)
+    ax.set_xlabel(r"Temperature (K)")
+    ax.set_ylabel(r"Thermopwoer, $S_{zz}\, \mu V/K$")
+    ax.legend()
+
+
+
+    ax = axes[5]
+    ax.set_xlabel(r"Temperature (K)")
+    ax.set_ylabel(r"Thermopwoer, $S_{xx}\, \mu V/K$")
+    ax.legend()
+
+
+    ylimList = [
+        (0,8),
+        (0,1.3),
+        (0,0.35),
+        (-0.9,1.2),
+        (-70,100),
+        (-30, 150)
+        ]
+
+    for i, ax in enumerate(axes):
+        ax.set_ylim(ylimList[i])
+        pass
+
+    plt.savefig("./NB3S4-band-resolved-CRTA-{}meV-shift-tau-ratio{}.png".format(Ep*1000, constC))
+
+
+
+
 if __name__ == "__main__":
+    """
+    Best Strategy here is to copy compute_Szz_Sxx_v2 method and make edits in local scripts/notebooks,
+    so that you can plot raw data as well and configure plots as needed.
+    
+    """
     # compute_energy_files("./data-file-schema.xml", out_dir="./energy", prefix="test", erange=(-0.1,0.1))
     plot_k_path(".", "./test.bt2", niter=2, unit_conv=Ha_to_eV)
+
+
+    dft_data_dir = "./PBEsol-Relaxed/energy/ib61/"
+    ylimList = [
+        (0,8),
+        (0,1),
+        (0,0.2),
+        (-1,1),
+        (-160,220),
+        (-30, 220)
+        ]
+
+
+    shift=48
+    fig_name = "fig.png"
+    fig, axes = compute_Szz_Sxx_v2(dft_data_dir, shift, ylimList, fig_name)
+
 
 
     pass
