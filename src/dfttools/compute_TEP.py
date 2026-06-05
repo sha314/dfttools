@@ -85,6 +85,17 @@ def shift_and_clip(E_values, deltaE, erange=(-0.4,0.4)):
     x = x[idx]
     return x, idx
 
+def get_OnsagerCoeff(E_values, TDF_values, Tlist, mulist=None):
+    if mulist is None:
+        mulist = np.copy(Tlist)*0.0
+        pass
+
+    tmp = []
+    for i, T in enumerate(Tlist):
+        L0, L1 = fermi_integral(E_values, TDF_values, T, mulist[i])
+        tmp.append([L0, L1])
+
+    return np.array(tmp)
 
 def get_thermopower(E_values, TDF_values, Tlist, mulist=None):
     if mulist is None:

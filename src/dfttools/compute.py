@@ -43,7 +43,7 @@ Path(fig_out_dir).mkdir(exist_ok=True)
 # -------------------------------------------------------------
 
 
-def load_interpolation():
+def load_interpolation(dft_data_dir, bt2filnam, niter):
     """
     
     """
@@ -78,10 +78,10 @@ def load_interpolation():
     return data, equivalences, coeffs
 
 
-def mu_of_T_compute():
+def mu_of_T_compute(dft_data_dir, bt2filnam, niter):
 
-    data, equivalences, coeffs = load_interpolation()
-
+    data, equivalences, coeffs = load_interpolation(dft_data_dir, bt2filnam, niter)
+    
     lattvec = data.get_lattvec()
     eband, vvband, cband = fite.getBTPbands(
         equivalences, coeffs, lattvec, curvature=False
@@ -167,9 +167,9 @@ def mu_of_T_compute():
     pass
 
 
-def dos_TDF_compute():
+def dos_TDF_compute(dft_data_dir, bt2filnam, niter):
 
-    data, equivalences, coeffs = load_interpolation()
+    data, equivalences, coeffs = load_interpolation(dft_data_dir, bt2filnam, niter)
 
     lattvec = data.get_lattvec()
     eband, vvband, cband = fite.getBTPbands(
@@ -250,15 +250,15 @@ def dos_TDF_compute():
     axes[3].set_xlim(xmin, xmax)
 
     plt.tight_layout()
-    plt.savefig("dos_TDF.png")
+    plt.savefig(fig_out_dir + "dos_TDF.png")
 
 
 
 
 if __name__ == "__main__":
 
-    dos_TDF_compute()
-    mu_of_T_compute()
+    dos_TDF_compute(dft_data_dir, bt2filnam, niter)
+    mu_of_T_compute(dft_data_dir, bt2filnam, niter)
 
 
     pass
