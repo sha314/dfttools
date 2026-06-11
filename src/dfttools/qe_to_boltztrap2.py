@@ -37,7 +37,7 @@ from dfttools import compute, compute_TEP, smooth
 Ha_to_eV = 27.211396132
 Ry_to_eV = 13.6057039763
 Ry_to_Ha = Ry_to_eV/Ha_to_eV
-Energy_Unit_Conv = 2.0
+Ha_to_Ry = 1.0/Ry_to_Ha
 
 
 
@@ -81,7 +81,7 @@ def parse_qe_xml(filepath):
 
     nbnd = int(find(band_structure, "nbnd").text.strip())
     nks  = int(find(band_structure, "nks").text.strip())
-    ef   = float(find(band_structure, "fermi_energy").text.strip()) * Energy_Unit_Conv
+    ef   = float(find(band_structure, "fermi_energy").text.strip()) * Ha_to_Ry
 
 
     B = get_reciprocal_lattice(root, ns)   # reciprocal lattice matrix
@@ -101,7 +101,7 @@ def parse_qe_xml(filepath):
         # print(kx, ky, kz)
         # break
 
-        energies    = np.array(find(ks, "eigenvalues").text.split(), dtype=float) * Energy_Unit_Conv
+        energies    = np.array(find(ks, "eigenvalues").text.split(), dtype=float) * Ha_to_Ry
         occupations = np.array(find(ks, "occupations").text.split(), dtype=float)
 
         # optional: spin attribute
@@ -271,6 +271,285 @@ def write_energy_blocks(df, filepath):
     print(f"Done: {filepath}")
     
 
+def parse_data_file_schema(xml_path: str) -> Dict:
+    """
+    Parse Quantum ESPRESSO's data-file-schema.xml to extract:
+    - Lattice vectors (A=at), reciprocal lattice vectors (bg), alat is the cell parameter scale
+
+    Reciprocal matrix, B = 2*pi * inverse(at) -> used in FermiSurfer
+    Also, B == 2 pi/alat * transpose(bg)
+
+    B @ A = 2 pi is satisfied
+
+    the bg vector from xml file. Each row is a reciprocal lattice vector b * alat/(2 pi). That is
+            b1
+    bg =    b2
+            b3
+
+    To get B, you need 2 pi/alat * transpose(bg).
+
+    Now,
+             
+    K_cart = b1 k1 + b2 k2 + b3 k3 =
+    K_cart =  B . K_frac
+
+    both K_cart and K_frac are collumn vectors and B is a matrix with collumns [b1,b2,b3] lattice vectors.
+
+
+    - k-points (xk), weights, nk1, nk2, nk3 (Monkhorst-Pack grid)
+    - k1, k2, k3 (grid offset)
+    - Band energies (et), nbnd, nks
+    - Fermi energy (ef), ef_up, ef_dw
+    - nspin, two_fermi_energies
+    - Symmetry operations (s, nsym, time_reversal, t_rev)
+    """
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+
+    data = {}
+
+    # --- Cell parameters ---
+    cell = root.find('.//cell')
+    # Direct lattice vectors (at) in alat units: columns are vectors
+    a1 = cell.find('a1')
+    a2 = cell.find('a2')
+    a3 = cell.find('a3')
+    at = np.array([
+        [float(x) for x in a1.text.split()],
+        [float(x) for x in a2.text.split()],
+        [float(x) for x in a3.text.split()]
+    ]).T  # Fortran convention: at(:,i) is the i-th vector, so transpose
+
+    # Reciprocal lattice vectors (bg) in 2π/alat units
+    reciprocal_lattice = root.find(".//reciprocal_lattice")
+    b1 = reciprocal_lattice.find('b1')
+    b2 = reciprocal_lattice.find('b2')
+    b3 = reciprocal_lattice.find('b3')
+    # print("b1 ", b1)
+    bg = np.array([
+        [float(x) for x in b1.text.split()],
+        [float(x) for x in b2.text.split()],
+        [float(x) for x in b3.text.split()]
+    ]).T
+
+    alat = float(root.find('.//atomic_structure').attrib.get('alat', 1.0))
+    data['alat'] = alat
+    data['at'] = at  # 3x3 matrix, columns are lattice vectors in alat units
+    data['bg'] = bg  # 3x3 matrix, columns are reciprocal vectors in 2π/alat units
+
+
+    # print(f"Raw XML: alat={alat:.4f} Bohr")
+    # print(f"  at columns (first): {at[:,0]}")
+    # print(f"  bg columns (first): {bg[:,0]}")
+
+    # # Normalize at and bg to match Fortran conventions
+    # at, bg, alat = normalize_at_bg(at, bg, alat)
+
+    # print(f"  at columns (first): {at[:,0]}")
+    # print(f"  bg columns (first): {bg[:,0]}")
+
+    # data['alat'] = alat
+    # data['at'] = at
+    # data['bg'] = bg
+
+    # print(f"  After normalization: at_zz={at[2,2]:.4f}, bg_zz={bg[2,2]:.4f}")
+    # print(f"  Check at^T @ bg = I: {np.allclose(np.dot(at.T, bg), np.eye(3), atol=1e-3)}")
+
+
+
+
+
+    # --- Monkhorst-Pack grid ---
+    # Look for monkhorst_pack or k_points_IBZ
+    mp_grid = root.find('.//monkhorst_pack')
+    if mp_grid is not None:
+        data['nk1'] = int(mp_grid.attrib['nk1'])
+        data['nk2'] = int(mp_grid.attrib['nk2'])
+        data['nk3'] = int(mp_grid.attrib['nk3'])
+
+        # Center of computation, Default Gamma=0,0,0
+        data['k1'] = int(mp_grid.attrib['k1'])
+        data['k2'] = int(mp_grid.attrib['k2'])
+        data['k3'] = int(mp_grid.attrib['k3'])
+    else:
+        # Try to infer from k_points_list
+        k_points = root.findall('.//k_point')
+        data['nk1'] = data['nk2'] = data['nk3'] = len(k_points)
+        data['k1'] = data['k2'] = data['k3'] = 0
+
+    # --- Band energies ---
+    band_structure = root.find(".//band_structure")
+    nbnd = int(band_structure.find(".//nbnd").text)
+    nelec = float(band_structure.find(".//nelec").text)
+    ef = fermi_energy = float(band_structure.find(".//fermi_energy").text)
+    data['ef'] = ef
+    data['fermi_energy'] = ef
+    data['ef_unit'] = "Ha"
+    nks = int(band_structure.find(".//nks").text)
+
+
+    xk = []
+    et = []
+    xkf = [] # in fractional coordinate
+    for ik, ks in enumerate(band_structure.findall("ks_energies")):
+        kpt = ks.find("k_point")
+        kx, ky, kz = [float(x) for x in kpt.text.split()]
+        xk.append([kx, ky, kz])
+        energies  = np.array(ks.find("eigenvalues").text.split(), dtype=float)
+        et.append(energies)
+        pass
+   
+    data['et'] = np.array(et)  # (nbnd, nks) in Ry
+    data['nbnd'] = nbnd
+    data['nks'] = nks
+    data['xk'] = np.array(xk)  # (3, nks) in crystal coordinates (2π/alat units) or dimension less coordiante
+
+    # --- Spin info ---
+    # Check for nspin in the XML
+    nspin_elem = root.find('.//nspin')
+    data['nspin'] = int(nspin_elem.text) if nspin_elem is not None else 1
+
+    # --- Fermi energy ---
+    # Try different paths
+    # ef_elem = root.find('.//fermi_energy')
+    # if ef_elem is not None:
+    #     data['ef'] = float(ef_elem.text)
+    # else:
+    #     data['ef'] = 0.0
+
+    # ef_up_elem = root.find('.//two_fermi_energies/fermi_energy_up')
+    # ef_dw_elem = root.find('.//two_fermi_energies/fermi_energy_down')
+    # if ef_up_elem is not None and ef_dw_elem is not None:
+    #     data['ef_up'] = float(ef_up_elem.text)
+    #     data['ef_dw'] = float(ef_dw_elem.text)
+    #     data['two_fermi_energies'] = True
+    # else:
+    #     data['ef_up'] = data['ef']
+    #     data['ef_dw'] = data['ef']
+    #     data['two_fermi_energies'] = False
+
+    # --- Symmetries ---
+    symmetries = root.find('.//symmetries')
+    symmetry_tmp = symmetries.findall("symmetry")
+    nsym = len(symmetry_tmp)
+    symm_mat = np.zeros((3, 3, nsym), dtype=int)
+    trans_mat = np.zeros((3, nsym), dtype=int)
+    t_rev = np.zeros(nsym, dtype=int)
+    for isym, sym in enumerate(symmetry_tmp):
+        rotation = sym.find("rotation")
+        translation = sym.find("fractional_translation")
+
+        if rotation is not None:
+            # print("rot.text ", rot.text)
+            rot_mat = np.array([float(x) for x in rotation.text.split()]).reshape(3, 3, order="C")
+            # print(rot_mat)
+            symm_mat[:, :, isym] = rot_mat
+            pass
+
+        if translation is not None:
+            t_mat = np.array([float(x) for x in translation.text.split()])
+            trans_mat[:, isym] = t_mat
+            pass
+
+
+
+    # for isym, sym in enumerate(symmetries):
+    #     # Rotation matrix (in crystal coordinates, integer entries)
+    #     rot = sym.find('rotation')
+    #     if rot is not None:
+    #         # print("rot.text ", rot.text)
+    #         rot_mat = np.array([float(x) for x in rot.text.split()]).reshape(3, 3, order="C")
+    #         print(rot_mat)
+    #         symm_mat[:, :, isym] = rot_mat
+
+    #     # Time reversal
+    #     trev = sym.find('time_reversal')
+    #     if trev is not None:
+    #         t_rev[isym] = int(trev.text)
+
+    data['nsym'] = nsym
+    data['rotation'] = symm_mat
+    data['translation'] = trans_mat
+    # data['t_rev'] = t_rev
+
+    # Check if time_reversal is used at all
+    # data['time_reversal'] = any(t_rev == 1) or any(t_rev == -1)
+
+    
+    inp = root.find(".//input")
+    # atomic_structure attributes
+    atomic_structure = inp.find("atomic_structure")
+
+    nat = int(atomic_structure.get("nat"))
+    alat = float(atomic_structure.get("alat"))
+    bravais_index = int(atomic_structure.get("bravais_index"))
+
+    data["nat"] = nat
+    data["alat"] = alat
+    data["bravais_index"] = bravais_index
+    
+
+    species_block = inp.find("atomic_species")
+
+    species = []
+    for sp in species_block.findall("species"):
+        species.append({
+            "name": sp.get("name"),
+            "mass": float(sp.find("mass").text),
+            "pseudo_file": sp.find("pseudo_file").text
+        })
+
+
+    positions = atomic_structure.find("atomic_positions")
+    
+
+    atoms = []
+    for atom in positions.findall("atom"):
+        coords = atom.text
+        atoms.append("{}  {}".format(atom.get("name"), coords))
+        pass
+
+
+    data["atomic_species"] = species
+    data["atomic_positions"] = atoms
+
+    return data
+
+    
+def get_data_frame(data_dict):
+    """
+    energy in Hartee unit
+    """
+    records = []
+    BINV = np.linalg.inv(data_dict['bg'])
+    print(BINV)
+    spin = data_dict['nspin']
+    ef = data_dict['ef']
+    for ik, kpt in enumerate(data_dict['xk']):
+        kx, ky, kz = kpt
+        kxf, kyf, kzf = kpt @ BINV
+
+        energies = data_dict['et'][ik]
+        for ib, eVal in enumerate(energies):
+            records.append({
+                    "ik":     ik,
+                    "ib":     ib,
+                    "spin":   spin,
+                    "kx":     kxf,
+                    "ky":     kyf,
+                    "kz":     kzf,
+                    "kx_cart":     kx,
+                    "ky_cart":     ky,
+                    "kz_cart":     kz,
+                    "E_Ha":   eVal,
+                    "E_Ha_relative": eVal - ef,
+                    "E_eV_relative": (eVal - ef) * Ha_to_eV
+                })
+        pass
+    df = pd.DataFrame(records)
+    return df
+
+
 
 
 
@@ -307,6 +586,47 @@ def compute_energy_files(qe_xml_file, out_dir, prefix, erange=()):
         write_boltztrap_structure(dir_name + "/{}_ib{}.structure".format(prefix, ib), cell_vectors, atoms)
         pass
 
+
+def compute_energy_files_v2(qe_xml_file, out_dir, prefix, erange=(-0.2,0.2)):
+    """
+    Compute .energy files for botlztrap2
+    
+    """
+
+    data = parse_data_file_schema(xml_file)
+    df = get_data_frame(data)
+
+    df['E_Ry'] = df["E_Ha"]*Ha_to_Ry
+    ef = data['ef']
+    nbnd = data['nbnd']
+    nks = data['nks']
+    atoms  = data['atomic_positions']
+
+    cell_vectors = [f"{a1} {a2} {a3}" for a1,a2,a3 in data['at']]
+
+
+    write_boltztrap_structure(out_dir + "/{}.structure".format(prefix), cell_vectors, atoms)
+    
+
+
+    df2 = df[df["E_eV_relative"] < erange[1]]
+    df2 = df2[df2["E_eV_relative"] > erange[0]]
+
+    ib_idx = df2['ib'].unique()
+
+    df3 = df[df['ib'].isin(ib_idx)]
+
+    write_boltztrap_energy(df3, out_dir + "/{}.energy".format(prefix), ef)
+
+    for ib in ib_idx:
+        df3 = df[df['ib']== ib]
+        from pathlib import Path
+        dir_name = out_dir + "/ib{}".format(ib)
+        Path(dir_name).mkdir(exist_ok=True)
+        print(dir_name)
+        write_boltztrap_energy(df3, dir_name + "/{}_ib{}.energy".format(prefix, ib), ef)
+        write_boltztrap_structure(dir_name + "/{}_ib{}.structure".format(prefix, ib), cell_vectors, atoms)
+        pass
 
 
 def get_bands_by_energy_from_interpolation(btp_file, out_dir, prefix, erange=()):
