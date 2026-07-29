@@ -170,8 +170,8 @@ def segmented_gaussian_smooth(x_values, y_values, smooth_dict):
 def gaussian_smooth_1d_reflected(data, sigma):
     """Smooth with reflected padding to eliminate boundary artifacts."""
     data = np.asarray(data)
-    pad = int(3 * sigma)
-    
+    pad = int(5 * sigma)
+    print("padding ", pad)
     # Reflect data at both ends
     padded = np.concatenate([data[pad:0:-1], data, data[-2:-pad-2:-1]])
     smoothed = gaussian_smooth_1d(padded, sigma=sigma)

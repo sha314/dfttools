@@ -235,7 +235,7 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
     returns : dictionary with keys ['bands', 'kpoints', 'atomic_species', 'cell_parameters',
                  'atomic_positions', 'mesh_size', 'dos', 'e_fermi', 'branches']
     """
-        
+
     #Retriving data from the 4 files
     nscf_data = parse_file(nscf_input_file, ["CELL_PARAMETERS", 
                                     "ATOMIC_SPECIES", 
@@ -282,6 +282,183 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
 
     # print(data["bands"].shape)
     return data
+
+def parse_k_path(lines):
+# The count line is right after the '/'
+    namelist_end = 0
+    count = int(lines[namelist_end + 1].strip())
+    
+    # Parse the k-point lines
+    kpoint_lines = []
+    for i in range(namelist_end + 2, namelist_end + 2 + count):
+        line = lines[i].strip()
+        if not line:
+            continue
+            
+        parts = line.split('!')
+        coords_nk = parts[0].split()
+        label = parts[1].strip() if len(parts) > 1 else ''
+        
+        kx, ky, kz, nk = coords_nk[0], coords_nk[1], coords_nk[2], coords_nk[3]
+        
+        kpoint_lines.append({
+            'kx': float(kx),
+            'ky': float(ky),
+            'kz': float(kz),
+            'nk': int(nk),
+            'label': label
+        })
+    
+    # Build branch_data_clean exactly as in your example
+    branch_data_clean = {"branches": []}
+    gamma = 'Γ'
+    prev_line = None
+    index_counter = 0
+    name_list = []
+    
+    for line in kpoint_lines:
+        # Convert Γ for LaTeX/plotting compatibility
+        label = line['label']
+        if label == gamma:
+            label = '\\Gamma'
+        
+        if prev_line is not None:
+            segment_length = prev_line['nk']
+            
+            # segment_length == 1 means the path doesn't contain any new points
+            if segment_length > 1:
+                prev_label = prev_line['label']
+                if prev_label == gamma:
+                    prev_label = '\\Gamma'
+                
+                branch_dict = {
+                    'name': f"{prev_label}-{label}",
+                    'start_index': index_counter,
+                    'end_index': index_counter + segment_length - 1
+                }
+                
+                index_counter = branch_dict['end_index'] + 1
+                
+                if branch_dict['name'] not in name_list:
+                    name_list.append(branch_dict['name'])
+                    branch_data_clean['branches'].append(branch_dict)
+        
+        prev_line = line
+    
+    return branch_data_clean
+    
+
+def parse_matdyn(file_matdyn_in):
+    """
+    Parse a QE/qe-thermo input file containing k-point paths.
+
+    File format:
+    &input
+        ...
+    /
+    <number_of_lines>
+    kx ky kz nk ! label
+    ...
+    """
+    with open(file_matdyn_in, 'r') as f:
+        lines = f.readlines()
+    
+    # Find the '/' that ends the namelist
+    namelist_end = None
+    for i, line in enumerate(lines):
+        if line.strip() == '/':
+            namelist_end = i
+            break
+    
+    if namelist_end is None:
+        raise ValueError("Could not find end of namelist '/'")
+    
+    # The count line is right after the '/'
+    branch = parse_k_path(lines[namelist_end+1:])
+    print(branch)
+    count = int(lines[namelist_end + 1].strip())
+    
+    # Parse the k-point lines
+    kpoint_lines = []
+    for i in range(namelist_end + 2, namelist_end + 2 + count):
+        line = lines[i].strip()
+        if not line:
+            continue
+            
+        parts = line.split('!')
+        coords_nk = parts[0].split()
+        label = parts[1].strip() if len(parts) > 1 else ''
+        
+        kx, ky, kz, nk = coords_nk[0], coords_nk[1], coords_nk[2], coords_nk[3]
+        
+        kpoint_lines.append({
+            'kx': float(kx),
+            'ky': float(ky),
+            'kz': float(kz),
+            'nk': int(nk),
+            'label': label
+        })
+    
+    # Build branch_data_clean exactly as in your example
+    branch_data_clean = {"branches": []}
+    gamma = 'Γ'
+    prev_line = None
+    index_counter = 0
+    name_list = []
+    
+    for line in kpoint_lines:
+        # Convert Γ for LaTeX/plotting compatibility
+        label = line['label']
+        if label == gamma:
+            label = '\\Gamma'
+        
+        if prev_line is not None:
+            segment_length = prev_line['nk']
+            
+            # segment_length == 1 means the path doesn't contain any new points
+            if segment_length > 1:
+                prev_label = prev_line['label']
+                if prev_label == gamma:
+                    prev_label = '\\Gamma'
+                
+                branch_dict = {
+                    'name': f"{prev_label}-{label}",
+                    'start_index': index_counter,
+                    'end_index': index_counter + segment_length - 1
+                }
+                
+                index_counter = branch_dict['end_index'] + 1
+                
+                if branch_dict['name'] not in name_list:
+                    name_list.append(branch_dict['name'])
+                    branch_data_clean['branches'].append(branch_dict)
+        
+        prev_line = line
+    
+    return branch_data_clean
+
+
+
+def get_phonon_data_dict(matdyn_input_file, freq_data_file, dos_data_file=None):
+    """
+
+    matdyn_input_file  : matdyn.in file used for QE phonon frequencies computation with matdyn.x command
+    freq_data_file  : .freq file generated by matdyn.x
+    dos_data_file    : dos.dat file generted by dos post processing with command dos.x. TODO
+    
+    
+    returns : dictionary with keys ['bands', 'kpoints', 'dos', , 'branches']
+    """
+
+    branch_data = parse_matdyn(matdyn_input_file)
+    bands_data = parse_bands_file(freq_data_file) 
+    
+    #Combine Data Together
+    data = bands_data | branch_data
+
+    # print(data["bands"].shape)
+    return data
+
 
 def plot_dos(data, axesin=None, fermi_factor=1.0):
     print(type(data['dos']))

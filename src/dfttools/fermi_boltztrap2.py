@@ -102,7 +102,7 @@ def extract_kpath_data(
     kpaths_list : list[np.ndarray]
         [array(n_points, 3), ...] - 3D k-points along each segment
     energies_list : list[np.ndarray]
-        [array(n_bands, n_points), ...] - energies for each segment
+        [array(n_bands, n_points), ...] - energies (or any function of 3D k points) for each segment
     """
 
     n_bands = energies_grid.shape[0]
@@ -263,7 +263,7 @@ def extract_kpath_interpolate(
 
 
 
-def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints_list, labels, efermi):
+def plot_and_save_bands_velocity_imass(filename, energy, velocity, curvature, ib, nkpoints_list, labels, efermi, band_color='blue'):
     fig, axes = plt.subplots(3, len(energy), figsize=(15, 6), sharey="row", gridspec_kw={
         "width_ratios": nkpoints_list,
         "wspace":0,
@@ -273,7 +273,7 @@ def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints
     for k in range(len(energy)):
         x = np.linspace(0, 1, energy[k].shape[1])
         ax = axes[0, k]
-        ax.plot(x, energy[k][ib].T-efermi, label=f"E(K),{ib}")
+        ax.plot(x, energy[k][ib].T-efermi, label=f"E(K),{ib}", color=band_color)
         ax.axhline(0, 0, 10, color='k', linestyle=":")
         if k == 6:
             ax.legend(framealpha=0.3)
@@ -292,18 +292,19 @@ def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints
         if k == 6:
             ax.legend(framealpha=0.3)
         if k == 0:
-            ax.set_ylabel(r"$v [Ha\cdot Bohr$]")
+            # ax.set_ylabel(r"$v [Ha\cdot Bohr/\hbar$]")
+            ax.set_ylabel(r"$v/v_0$")
         ax.set_xlabel(f"{labels[k]}")
 
 
         ax = axes[2, k]
 
-        ax.plot(x, curvature[k][0,0, ib].T/100, label="xx")
-        ax.plot(x, curvature[k][1,1, ib].T/100, label="yy")
-        ax.plot(x, curvature[k][2,2, ib].T/100, label="zz")
-        ax.plot(x, curvature[k][0,1, ib].T/100, label="xy")
-        ax.plot(x, curvature[k][0,2, ib].T/100, label="xz")
-        ax.plot(x, curvature[k][1,2, ib].T/100, label="yz")
+        ax.plot(x, curvature[k][0,0, ib].T, label="xx")
+        ax.plot(x, curvature[k][1,1, ib].T, label="yy")
+        ax.plot(x, curvature[k][2,2, ib].T, label="zz")
+        ax.plot(x, curvature[k][0,1, ib].T, label="xy")
+        ax.plot(x, curvature[k][0,2, ib].T, label="xz")
+        ax.plot(x, curvature[k][1,2, ib].T, label="yz")
         ax.set_ylim(-0.15, 0.15)
 
         ax.axhline(0, 0, 10, color='k', linestyle=":")
@@ -311,6 +312,7 @@ def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints
             ax.legend(framealpha=0.3)
         if k == 0:
             # ax.set_ylabel(r"$Ha\cdot Bohr^2$")
+            # ax.set_ylabel(r"$m_e/m^* [Ha\cdot Bohr^2/\hbar^2$]$")
             ax.set_ylabel(r"$m_e/m^*$")
         ax.set_xlabel(f"{labels[k]}")
         axes[0, k].set_xticks([])
@@ -329,8 +331,94 @@ def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints
         ax.margins(x=0)           # remove all x-padding
         ax.autoscale(enable=True, axis="x", tight=True)
 
-    plt.savefig(f"Nb3S4-bt2-bands-velocity-curvature-ib{ib}.png")
+    plt.savefig(filename)
     pass
+
+
+def plot_and_save_bands_velocity_imass_v2(filename, energy, velocity, curvature, ib, nkpoints_list, labels, efermi, erange_ev, band_color='blue'):
+    """
+    Plots the bands
+    And plots velocity and inverse effective mass for k points for which the bands lie in the given window.
+    
+    """
+    fig, axes = plt.subplots(3, len(energy), figsize=(15, 6), sharex=True, sharey="row", gridspec_kw={
+        "width_ratios": nkpoints_list,
+        "wspace":0,
+        "hspace":0
+        }, dpi=300)
+    # print(energy[0].shape)
+    for k in range(len(energy)):
+        x = np.linspace(0, 1, energy[k].shape[1])
+        ax = axes[0, k]
+        eb = energy[k][ib].T-efermi
+        eb *= Ha_to_eV
+        idx = np.logical_and(eb <= erange_ev[1], eb >= erange_ev[0])
+        ax.plot(x, eb, label=f"E(K),{ib}", color=band_color)
+        ax.axhline(erange_ev[1], color='k', linestyle="--", alpha=0.5)
+        ax.axhline(erange_ev[0], color='k', linestyle="--", alpha=0.5)
+        ax.axhline(0, 0, 10, color='k', linestyle=":")
+        if k == 6:
+            ax.legend(framealpha=0.3)
+        if k == 0:
+            ax.set_ylabel(r"$E-E_F (eV)$")
+            pass
+        ax.set_xlabel(f"{labels[k]}")
+        ax.set_ylim(-0.2, 0.2)
+        ax.set_xlim(0,1)
+
+
+        ax = axes[1, k]
+        # print(idx)
+        # print(velocity[k].shape)
+        ax.plot(x[idx], velocity[k][0, ib, idx].T, label="vx")
+        ax.plot(x[idx], velocity[k][1, ib, idx].T, label="vy")
+        ax.plot(x[idx], velocity[k][2, ib, idx].T, label="vz")
+        # print(x[idx], velocity[k][2, ib, idx].T)
+        # ax.set_ylim(-0.15, 0.15)
+
+        if k == 6:
+            ax.legend(framealpha=0.3)
+        if k == 0:
+            # ax.set_ylabel(r"$v [Ha\cdot Bohr/\hbar$]")
+            ax.set_ylabel(r"$v/v_0$")
+        ax.set_xlabel(f"{labels[k]}")
+
+
+        ax = axes[2, k]
+
+        ax.plot(x[idx], curvature[k][0,0, ib, idx].T, label="xx")
+        ax.plot(x[idx], curvature[k][1,1, ib, idx].T, label="yy")
+        ax.plot(x[idx], curvature[k][2,2, ib, idx].T, label="zz")
+        ax.plot(x[idx], curvature[k][0,1, ib, idx].T, label="xy")
+        ax.plot(x[idx], curvature[k][0,2, ib, idx].T, label="xz")
+        ax.plot(x[idx], curvature[k][1,2, ib, idx].T, label="yz")
+        # ax.set_ylim(-0.15, 0.15)
+
+        ax.axhline(0, 0, 10, color='k', linestyle=":")
+        if k == 6:
+            ax.legend(framealpha=0.3)
+        if k == 0:
+            # ax.set_ylabel(r"$Ha\cdot Bohr^2$")
+            # ax.set_ylabel(r"$m_e/m^* [Ha\cdot Bohr^2/\hbar^2$]$")
+            ax.set_ylabel(r"$m_e/m^*$")
+        ax.set_xlabel(f"{labels[k]}")
+        axes[0, k].set_xticks([])
+        axes[1, k].set_xticks([])
+        axes[2, k].set_xticks([])
+        pass
+    for ax in axes.flat:
+        # Y-axis spine
+        ax.spines["left"].set_alpha(0.3)
+        ax.spines["right"].set_alpha(0.3)
+
+        # X-axis spine
+        ax.spines["bottom"].set_linewidth(1.2)
+        ax.spines["top"].set_linewidth(1.2)
+
+        ax.margins(x=0)           # remove all x-padding
+        ax.autoscale(enable=True, axis="x", tight=True)
+
+    plt.savefig(filename)
 
 
 
@@ -416,10 +504,21 @@ def method_2(data, equivalences, coeffs):
 
     kpoints, energy, velocity, curvature = extract_kpath_interpolate(data, equivalences, coeffs, kpath_str, nkpoints_list)
 
-    plot_and_save_bands_velocity_imass(energy, velocity, curvature, 61, nkpoints_list, labels, data.fermi)
-    plot_and_save_bands_velocity_imass(energy, velocity, curvature, 62, nkpoints_list, labels, data.fermi)
-    plot_and_save_bands_velocity_imass(energy, velocity, curvature, 63, nkpoints_list, labels, data.fermi)
-    plot_and_save_bands_velocity_imass(energy, velocity, curvature, 64, nkpoints_list, labels, data.fermi)
+    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{61}.png", 
+                                                    energy, velocity, curvature, 61, 
+                                                    nkpoints_list, labels, data.fermi, band_color='red')
+    
+    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{62}.png", 
+                                                    energy, velocity, curvature, 62, 
+                                                    nkpoints_list, labels, data.fermi, band_color='green')
+    
+    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{63}.png", 
+                                                    energy, velocity, curvature, 63, 
+                                                    nkpoints_list, labels, data.fermi, band_color='blue')
+    
+    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{64}.png", 
+                                                    energy, velocity, curvature, 64, 
+                                                    nkpoints_list, labels, data.fermi, band_color='orange')
 
     pass
 

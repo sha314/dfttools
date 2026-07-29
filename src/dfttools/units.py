@@ -65,3 +65,8 @@ Ha = 1.0
 angstroms_to_bohr = 1.8897161646321
 bohr_to_angstroms = 1/1.8897161646321
 
+
+Ha_to_eV = 27.211396132
+Ry_to_eV = 13.6057039763
+Ry_to_Ha = Ry_to_eV/Ha_to_eV
+Energy_Unit_Conv = 2.0

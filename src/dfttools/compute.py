@@ -45,7 +45,9 @@ Path(fig_out_dir).mkdir(exist_ok=True)
 
 def load_interpolation(dft_data_dir, bt2filnam, niter):
     """
-    
+    dft_data_dir : directory containing data-file-schema.xml or .energy files or vasp files
+    bt2filnam    : filename of boltztrap interpolation bt2 file
+    niter        : 
     """
     if os.path.isfile(bt2filnam):
         print("Loading the precalculated results from", bt2filnam)
@@ -167,6 +169,26 @@ def mu_of_T_compute(dft_data_dir, bt2filnam, niter):
     pass
 
 
+def dos_to_Nelec(dft_data_dir, bt2filnam, niter, efermi_ev=None):
+    """
+    
+    """
+
+    data, equivalences, coeffs = load_interpolation(dft_data_dir, bt2filnam, niter)
+
+    lattvec = data.get_lattvec()
+    eband, vvband, cband = fite.getBTPbands(
+        equivalences, coeffs, lattvec, curvature=False
+    )
+    Cepsilon, Cdos, Cvvdos, cdos = BL.BTPDOS(eband, vvband, npts=n_bins)
+    if efermi_ev is None:
+        idx = Cepsilon <= data.fermi
+    else:
+        idx = Cepsilon <= efermi_ev*units.eV
+    print("N = ", np.sum(Cdos)*(Cepsilon[1]-Cepsilon[0]))
+
+
+
 def dos_TDF_compute(dft_data_dir, bt2filnam, niter):
 
     data, equivalences, coeffs = load_interpolation(dft_data_dir, bt2filnam, niter)
@@ -193,7 +215,7 @@ def dos_TDF_compute(dft_data_dir, bt2filnam, niter):
     DOS = Cdos * units.eV
     TDF_CRTA = Cvvdos
     TDF_IDOS = Cvvdos / DOS
-
+    
 
     np.savetxt(dft_data_dir + signature + "_DOS.csv", np.c_[energy, DOS], 
             delimiter=",",
