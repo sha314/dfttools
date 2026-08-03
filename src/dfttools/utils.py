@@ -106,6 +106,7 @@ def clean_up_branch_data(branch_list):
     """
     
     """
+    print("clean_up_branch_data () *************")
     #Cleaning up branch_data
     branch_data_clean = {"branches":[]}
     gamma = 'Γ'
@@ -120,8 +121,10 @@ def clean_up_branch_data(branch_list):
 
         if prev_line is not None:
             segment_length = int(prev_line[-3])  
+            # print("segment_length ", segment_length)
 
-            # segment_length == 1 means that the path doesn not contain any new path. already defined
+            if segment_length == 1: # means that the path doesn not contain any new path. already defined
+                index_counter += 1
             if segment_length > 1:
                 branch_dict = {
                     'name': f"{prev_line[-1]}-{line[-1]}",
@@ -129,13 +132,18 @@ def clean_up_branch_data(branch_list):
                             'end_index': index_counter + segment_length - 1
                         }
                         #print(branch_dict)
-                index_counter = branch_dict['end_index'] + 1
+                # index_counter = branch_dict['end_index'] + 1
+                index_counter += segment_length
                 if branch_dict['name'] not in name_list:
                     name_list.append(branch_dict['name'])
                     branch_data_clean['branches'].append(branch_dict)
+                else:
+                    # print("path a 2nd time!")
+                    pass
                 
             else:
-                    None
+                # print("This was else")
+                pass
         prev_line = line
         pass
     print("branch_data_clean ", branch_data_clean)
@@ -270,7 +278,7 @@ def get_data_dict(nscf_input_file, bands_input_file, bands_data_file, dos_data_f
     #Renaming kpoints from nscf as mesh size
     nscf_data["mesh_size"] = nscf_data.pop("k_points")
 
-    # print(branch_data)
+    print(branch_data)
     branch_data_clean = clean_up_branch_data(branch_data["k_points"][1:])
     dos_data_clean = clean_up_dos_data(dos_data)
     #print(dos_data_clean["e_fermi"])
@@ -581,12 +589,12 @@ if __name__=="__main__":
  
 
     nx = 22
-    data_dir = "/Users/shahnoor/projects/dfttools/tests/"
+    data_dir = "/Users/shahnoor/projects/dfttools/tmp/"
     bands_path = data_dir + "bands_{}.dat".format(nx)
-    dos_path = data_dir + "tdos_{}.dat".format(nx)
+    dos_path = data_dir + "dos_{}.dat".format(nx)
     nscf_path = data_dir + "nscf.{}.nb3s4.in".format(nx)
     branches_path = data_dir + "bands_{}.nb3s4.in".format(nx)
-    data = get_data_dict(nscf_path, bands_path, branches_path, dos_path)
+    data = get_data_dict(nscf_path, branches_path, bands_path, dos_path)
 
     plot_bands(data)
     # filename = "test_data{}.pkl".format(nx)
