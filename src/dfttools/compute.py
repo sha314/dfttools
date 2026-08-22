@@ -47,7 +47,7 @@ def load_interpolation(dft_data_dir, bt2filnam, niter):
     """
     dft_data_dir : directory containing data-file-schema.xml or .energy files or vasp files
     bt2filnam    : filename of boltztrap interpolation bt2 file
-    niter        : 
+    niter        : multiplier for number of k points relative to input data
     """
     if os.path.isfile(bt2filnam):
         print("Loading the precalculated results from", bt2filnam)

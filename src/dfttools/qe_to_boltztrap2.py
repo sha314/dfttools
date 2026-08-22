@@ -274,7 +274,7 @@ def write_energy_blocks(df, filepath):
 def parse_data_file_schema(xml_path: str):
     """
     Parse Quantum ESPRESSO's data-file-schema.xml to extract:
-    - Lattice vectors (A=at), reciprocal lattice vectors (bg), alat is the cell parameter scale
+    - Lattice vectors (A=at), reciprocal lattice vectors (B=bg), alat is the cell parameter scale
 
     Reciprocal matrix, B = 2*pi * inverse(at) -> used in FermiSurfer
     Also, B == 2 pi/alat * transpose(bg)
@@ -314,11 +314,12 @@ def parse_data_file_schema(xml_path: str):
     a1 = cell.find('a1')
     a2 = cell.find('a2')
     a3 = cell.find('a3')
+    # rows are lattice vectors
     at = np.array([
         [float(x) for x in a1.text.split()],
         [float(x) for x in a2.text.split()],
         [float(x) for x in a3.text.split()]
-    ]).T  # Fortran convention: at(:,i) is the i-th vector, so transpose
+    ])
 
     # Reciprocal lattice vectors (bg) in 2π/alat units
     reciprocal_lattice = root.find(".//reciprocal_lattice")
@@ -326,16 +327,20 @@ def parse_data_file_schema(xml_path: str):
     b2 = reciprocal_lattice.find('b2')
     b3 = reciprocal_lattice.find('b3')
     # print("b1 ", b1)
+    # print("b1 ", b2)
+    # print("b1 ", b3)
+    # rows are lattice vectors
     bg = np.array([
         [float(x) for x in b1.text.split()],
         [float(x) for x in b2.text.split()],
         [float(x) for x in b3.text.split()]
-    ]).T
+    ])
 
     alat = float(root.find('.//atomic_structure').attrib.get('alat', 1.0))
     data['alat'] = alat
-    data['at'] = at  # 3x3 matrix, columns are lattice vectors in alat units
-    data['bg'] = bg  # 3x3 matrix, columns are reciprocal vectors in 2π/alat units
+    # Take transpose to make columns as lattice vectors
+    data['at'] = at.T  # 3x3 matrix, columns are lattice vectors in alat units
+    data['bg'] = bg.T  # 3x3 matrix, columns are reciprocal vectors in 2π/alat units
 
 
     # print(f"Raw XML: alat={alat:.4f} Bohr")
@@ -398,7 +403,7 @@ def parse_data_file_schema(xml_path: str):
         energies  = np.array(ks.find("eigenvalues").text.split(), dtype=float)
         et.append(energies)
         pass
-   
+
     data['et'] = np.array(et)  # (nbnd, nks) in Ry
     data['nbnd'] = nbnd
     data['nks'] = nks
@@ -463,14 +468,14 @@ def parse_data_file_schema(xml_path: str):
     #         symm_mat[:, :, isym] = rot_mat
 
     #     # Time reversal
-    #     trev = sym.find('time_reversal')
-    #     if trev is not None:
-    #         t_rev[isym] = int(trev.text)
+    trev = sym.find('time_reversal')
+    if trev is not None:
+        t_rev[isym] = int(trev.text)
 
     data['nsym'] = nsym
     data['rotation'] = symm_mat
     data['translation'] = trans_mat
-    # data['t_rev'] = t_rev
+    data['t_rev'] = t_rev
 
     # Check if time_reversal is used at all
     # data['time_reversal'] = any(t_rev == 1) or any(t_rev == -1)

@@ -3,7 +3,7 @@
 # and plots it
 
 
-from dfttools import compute
+from dfttools import compute, units
 from dfttools.units import *
 import numpy as np
 import ase.dft.kpoints as asekp
@@ -11,9 +11,790 @@ import ast
 import itertools
 
 
+
 from BoltzTraP2.misc import TimerContext
 from BoltzTraP2 import fite
 import matplotlib.pyplot as plt
+
+import plotly.graph_objects as go
+import plotly.io as pio
+
+
+def get_hexagonal_cell_edges_v2(bg, scale=[1,1,1]):
+    """
+    Compute first Brillouin zone boundary edges and vertices.
+
+    Parameters
+    ----------
+    bg : ndarray, shape (3, 3)
+        Reciprocal lattice vectors as rows: bg = [
+                                                    [b1], 
+                                                    [b2], 
+                                                    [b3]]
+    scale : when you need to scale the hexagonal cell along any direction, use scale factors as [kx,ky,kz] format
+
+    Returns
+    -------
+    edge_segments : list of dict
+        Each dict has keys 'x', 'y', 'z' with two-element lists. Order : vertical, bottom, top
+    all_vertices : ndarray, shape (12, 3)
+        All BZ vertices (hexagonal prism). Order : bottom, top
+    """
+    b1 = bg[0]*scale[0]
+    b2 = bg[1]*scale[1]
+    b3 = bg[2]*scale[2]
+
+    # --- Detect hexagonal symmetry ---
+    cos_12 = np.dot(b1, b2) / (np.linalg.norm(b1) * np.linalg.norm(b2))
+    cos_13 = np.dot(b1, b3) / (np.linalg.norm(b1) * np.linalg.norm(b3))
+    cos_23 = np.dot(b2, b3) / (np.linalg.norm(b2) * np.linalg.norm(b3))
+
+    is_hexagonal = (
+        np.abs(np.abs(cos_12) - 0.5) < 0.15 and
+        np.abs(cos_13) < 0.15 and
+        np.abs(cos_23) < 0.15
+    )
+    if not is_hexagonal:
+        raise ValueError(f"Not hexagonal: cos12={cos_12:.3f}, cos13={cos_13:.3f}, cos23={cos_23:.3f}")
+        pass
+
+    # --- Generate neighbors ---
+    neighbors = []
+    for i in range(-2, 3):
+        for j in range(-2, 3):
+            for k in range(-2, 3):
+                if i == 0 and j == 0 and k == 0:
+                    continue
+                neighbors.append(i * b1 + j * b2 + k * b3)
+    neighbors = np.array(neighbors)
+
+    # --- Find 6 shortest in-plane G vectors ---
+    b3_hat = b3 / np.linalg.norm(b3)
+    G_in_plane = [(np.linalg.norm(G), G) for G in neighbors
+                  if np.abs(np.dot(G, b3_hat)) < 0.1 * np.linalg.norm(b3)]
+    G_in_plane.sort(key=lambda x: x[0])
+
+    hex_G = [g[1] for g in G_in_plane[:6]]
+    print("hex_G ", hex_G)
+    # Sort by angle around b3 axis using a proper plane basis
+    center_plane = np.mean(hex_G, axis=0)
+    print("center_plane ", center_plane)
+    e3 = b3_hat
+    ref = np.array([1.0, 0.0, 0.0]) if np.abs(e3[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    e1 = ref - np.dot(ref, e3) * e3
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(e3, e1)
+    print(e1, e2, e3)
+
+    angles = [np.arctan2(np.dot(g - center_plane, e2), np.dot(g - center_plane, e1))
+              for g in hex_G]
+    print(angles)
+    hex_G = [g for _, g in sorted(zip(angles, hex_G))]
+
+    # --- Build hexagonal prism ---
+    hex_vertices = np.array([(hex_G[i] + hex_G[(i + 1) % 6]) / 3 for i in range(6)])
+    b3_half = 0.5 * b3
+    bottom = hex_vertices - b3_half
+    top    = hex_vertices + b3_half
+    all_vertices = np.vstack([bottom, top])
+
+    edge_segments = []
+    # Vertical edges
+    for i in range(6):
+        edge_segments.append({'x': [bottom[i,0], top[i,0]],
+                              'y': [bottom[i,1], top[i,1]],
+                              'z': [bottom[i,2], top[i,2]]})
+    # Bottom & top hexagons
+    for i in range(6):
+        j = (i + 1) % 6
+        edge_segments.append({'x': [bottom[i,0], bottom[j,0]],
+                              'y': [bottom[i,1], bottom[j,1]],
+                              'z': [bottom[i,2], bottom[j,2]]})
+        edge_segments.append({'x': [top[i,0], top[j,0]],
+                              'y': [top[i,1], top[j,1]],
+                              'z': [top[i,2], top[j,2]]})
+
+    return edge_segments, all_vertices
+
+
+
+    
+def get_high_symmetry_points(bg, scale=[1,1,1]):
+    """
+    bg : Reciprocal lattice vectors as rows
+    scale : you can scale up or down along any vectors.
+    Return Γ, K, M, A, H, L for a hexagonal BZ.
+    """
+
+    b1, b2, b3 = bg[0], bg[1], bg[2]
+    edge_segments, hex_vertices = get_hexagonal_cell_edges_v2(bg)
+    b3_half = 0.5 * b3
+
+    return {
+        'Gamma': np.array([0.0, 0.0, 0.0]),
+        'K': hex_vertices[0],
+        'M': 0.5 * (hex_vertices[0] + hex_vertices[1]),
+        'A': b3_half,
+        'H': hex_vertices[0] + b3_half,
+        'L': 0.5 * (hex_vertices[0] + hex_vertices[1]) + b3_half,
+    }
+
+
+def frac_to_cartesian(k_frac, bg):
+    """
+    Convert fractional k-points to Cartesian coordinates.
+    
+    Parameters
+    ----------
+    k_frac : ndarray, shape (3,) or (3, N)
+        Fractional coordinates (kx, ky, kz) in [0, 1).
+    bg : ndarray, shape (3, 3)
+        Reciprocal lattice vectors as rows: bg = [b1, b2, b3].
+
+    Operation performed is simply 'k_frac[0]*bg[0] + k_frac[1]*bg[1] + k_frac[2]*bg[2]' but with @ 
+    
+    Returns
+    -------
+    k_cart : ndarray, same shape as k_frac
+    """
+    return bg.T @ k_frac
+
+
+
+
+def rotate_z(KX_data, KY_data, angle):
+    """
+    angle : angle in degree
+    """
+    theta = np.radians(angle)
+    c = np.cos(theta)
+    s = np.sin(theta)
+    
+    R = np.array([
+        [ c, -s],
+        [ s,  c],
+    ])
+    KX = KX_data.ravel()
+    KY = KY_data.ravel()
+    Kvec = np.vstack([KX, KY])
+    # print(Kvec.shape)
+    Kvec_rot = R @ Kvec
+
+    KX_rot = Kvec_rot[0, :].reshape(KX_data.shape)
+    KY_rot = Kvec_rot[1, :].reshape(KY_data.shape)
+
+    return KX_rot, KY_rot
+
+
+
+def rotate_plain_z(KX_data, KY_data, angle):
+    """
+    KX_data : 1D array
+    KY_data : 1D array
+    angle : angle in degree
+    """
+    theta = np.radians(angle)
+    c = np.cos(theta)
+    s = np.sin(theta)
+    
+    R = np.array([
+        [ c, -s],
+        [ s,  c],
+    ])
+
+    Kvec = np.vstack([KX_data, KY_data])
+    print(Kvec.shape)
+    Kvec_rot = R @ Kvec
+    print(Kvec_rot.shape)
+    
+
+    return Kvec_rot[0], Kvec_rot[1]
+
+
+
+def get_uniform_k_grid_interpolate(
+        data, equivalences, coeffs,
+    nk1, nk2, nk3, K_grid,
+    band_ids=None,
+):
+    """
+    Extract band energies along a high-symmetry k-path from BoltzTraP2 data.
+
+    Uses BoltzTraP2's Fourier interpolation to compute energies at arbitrary
+    k-points along the requested path. And returned energy, velocity and curvature grids are reshaped with specified nk points
+
+    Parameters
+    ----------
+    data, equivalences, coeffs : obtained from ``load_interpolation``.
+
+    nk1, nk2, nk3 : 
+    K_grid        : k_grid in fractional coordinate
+
+    band_ids : list[int] or None, optional
+        Subset of band indices to extract. If None, all bands are used.
+
+    Returns
+    -------
+    kpoints_grid : list[np.ndarray]
+        List of dense 3D k-point arrays, one per segment.
+        Shape of each array: ``(n_k, 3)``.
+
+    energy_grid : list[np.ndarray]
+        List of energy arrays, one per segment.
+        Shape of each array: ``(n_bands, nk1, nk2, nk3)``.
+
+    velocity_grid : 
+        Group velocity in [Ha . Bohr] unit.
+        Shape of each array: ``(n_bands, 3, nk1, nk2, nk3)``.
+
+    curvature_grid : 
+        Band Curvature in [Ha . Bohr^2] unit. Also known as inverse of effective mass.
+        Shape of each array: ``(n_bands, 3, 3, nk1, nk2, nk3)``.
+    """
+
+    coeffs_tmp = coeffs
+    if band_ids is not None:
+        coeffs_tmp = coeffs[band_ids,:]
+        pass
+
+    with TimerContext() as timer:
+        egrid, vgrid, cgrid = fite.getBands(
+            K_grid, equivalences, data.get_lattvec(), coeffs_tmp, curvature=True
+        )
+        deltat = timer.get_deltat()
+        print("rebuilding the bands took {:.3g} s".format(deltat))
+        pass
+    energy_grid = egrid.reshape((-1,nk1,nk2,nk3))
+    velocity_grid = vgrid.reshape((-1,3,nk1,nk2,nk3))
+    invmass_grid = cgrid.reshape((-1,3,3,nk1,nk2,nk3))
+    return K_grid, energy_grid, velocity_grid, invmass_grid
+
+
+def get_uniform_nk_interpolate(
+        data, equivalences, coeffs,
+    nk1, nk2, nk3,
+    band_ids=None,
+):
+    """
+    same as ```get_uniform_k_grid_interpolate```
+    but it does not take k_grid as input, rather it calculates in range (0,1) and passes it to ```get_uniform_k_grid_interpolate```
+    """
+
+
+    k1 = np.linspace(0, 1, nk1)
+    k2 = np.linspace(0, 1, nk2)
+    k3 = np.linspace(0, 1, nk3)
+    K1, K2, K3 = np.meshgrid(k1, k2, k3)
+    K_grid = np.column_stack((K1.ravel(), K2.ravel(), K3.ravel()))
+
+    return get_uniform_k_grid_interpolate(data, equivalences, coeffs, nk1, nk2, nk3, K_grid, band_ids)
+    
+
+
+
+def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_scale=(-1,1), at_kz=0, fig=None, edges=None):
+    """
+    KX_bz, KY_bz  : (nk1,nk2) shapred array
+    Energy        : of a single band shaped (nk1,nk2)
+    surface_color : color scheme of a single band shapred (nk1,nk2)
+    
+    """
+    if fig is None:
+        fig = go.Figure()
+        pass
+
+
+    # KX_bz, KY_bz = rotate_z(KX_bz, KY_bz, 30)
+    for i in range(6):
+        fig.add_trace(go.Surface(
+            x=KX_bz, y=KY_bz, z=Energy,
+            name='Band',
+            surfacecolor=surface_color,   # color = some other function
+            # colorscale='RdBu_r',
+            colorscale=[
+                [0.0, "rgb(0, 0, 180)"],      # deep blue
+                [0.35, "rgb(120, 170, 255)"], # light blue
+                [0.5, "rgb(255, 255, 255)"],  # white at center
+                [0.65, "rgb(255, 120, 120)"], # light red
+                [1.0, "rgb(180, 0, 0)"]       # deep red
+        ],
+            showscale=(i==0),
+            # colorbar=dict(title=r'$(\frac{1}{m^*_{xx}} + \frac{1}{m^*_{yy}})/2$', x=0.9),
+            # colorbar=dict(title=r'(1/mxx + 1/myy)/2', x=0.9),
+            # colorbar=dict(
+            #     title=dict(text=r'$(\frac{1}{m^*_{xx}} + \frac{1}{m^*_{yy}})/2$', font=dict(size=14)),
+            #     titleside='right'
+            # ),
+            colorbar=dict(
+                title=dict(
+                    text=(
+                        '(1/<i>m</i><sub>xx</sub><sup>*</sup> + '
+                        '1/<i>m</i><sub>yy</sub><sup>*</sup>)'
+                        '<i>m</i><sub>e</sub>/2 '
+                    ),
+                    side='right',
+                    font=dict(
+                        family='Times New Roman',
+                        size=20,
+                        color='black',
+                    ),
+                ),
+
+                # Position
+                x=0.92,
+                y=0.50,
+
+                # Size
+                len=0.72,
+                thickness=20,
+
+                xanchor='left',
+                yanchor='middle',
+
+                # Ticks
+                tickfont=dict(
+                    family='Times New Roman',
+                    size=20,
+                    color='black',
+                ),
+
+                tickmode='array',
+                tickvals=[-1, -0.5, 0, 0.5, 1],
+                ticktext=['-1.0', '-0.5', '0.0', '0.5', '1.0'],
+
+                outlinewidth=1,
+                outlinecolor='black',
+            ),
+            cmin=color_scale[0],    # hides surface where z < -2
+            cmax=color_scale[1],     # hides surface where z > 2
+            opacity=1.0,
+            # Remove mesh lines
+            hidesurface=False,
+            contours=dict(
+                x=dict(show=False),
+                y=dict(show=False),
+                z=dict(show=False),
+            ),
+        ))
+        # fig.add_trace(go.Surface(
+        #     x=KX_bz, y=KY_bz, z=np.zeros_like(Energy),
+        #     name='E_F',
+        #     colorscale=[[0, 'rgba(128, 128, 128, 0.6)'], [1, 'rgba(128, 128, 128, 0.6)']],  # black, 30% alpha
+        #     showscale=False,
+        #     hoverinfo='skip',
+        # ))
+
+        KX_bz, KY_bz = rotate_z(KX_bz, KY_bz, 60)
+        pass
+
+
+    # fig = go.Figure(data=[
+    #     go.Surface(
+    #         x=KX_bz,           # 2D array or 1D kx values
+    #         y=KY_bz,           # 2D array or 1D ky values  
+    #         z=Energy,      # must be 2D with shape (len(y), len(x))
+    #         colorscale='RdBu_r',
+    #         colorbar=dict(title='E (eV)'),
+    #     )
+    # ])
+
+
+    if edges is not None:
+        # edges = edges[7:18:2]
+
+        x_edges, y_edges, z_edges = [], [], []
+        for seg in edges:
+            x_edges.extend(seg['x'] + [None])
+            y_edges.extend(seg['y'] + [None])
+            z_edges.extend(seg['z'] + [None])
+
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=x_edges,
+                y=y_edges,
+                z=z_edges,
+
+                mode='lines',
+
+                line=dict(
+                    color='black',
+                    width=5,
+                ),
+
+                hoverinfo='skip',
+                showlegend=False,
+            )
+        )
+        pass
+
+
+
+    ########## Gamma, M and K point
+
+    x_val, y_val, z_val = 0, 0, 0.017
+    fig.add_trace(
+        go.Scatter3d(
+            x=[x_val],
+            y=[y_val],
+            z=[z_val],
+            mode='markers',
+            marker=dict(size=5, color='black'),
+            hoverinfo='skip',
+            showlegend=False,
+        )
+    )
+
+    # Add the 3D annotation via layout update
+    annotation_dict_G = dict(
+                    x=x_val,
+                    y=y_val,
+                    z=z_val,
+                    text='<b>Γ</b>',
+                    showarrow=False,
+                    font=dict(size=25, color='black'),
+                    # Pixel offsets to bring the label closer (negative moves it up)
+                    yshift=6,   # adjust this value
+                    xshift=-8,
+                )
+
+
+    x_val, y_val, z_val = 0, 0.2, 0.017
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=[x_val],
+            y=[y_val],
+            z=[z_val],
+            mode='markers',
+            marker=dict(size=5, color='black'),        
+            hoverinfo='skip',
+            showlegend=False,
+        )
+    )
+    annotation_dict_M = dict(
+                    x=x_val,
+                    y=y_val,
+                    z=z_val,
+                    text='<b>M</b>',
+                    showarrow=False,
+                    font=dict(size=25, color='black'),
+                    # Pixel offsets to bring the label closer (negative moves it up)
+                    yshift=8,   # adjust this value
+                    xshift=20,
+                )
+
+
+    x_val=-0.1156
+    fig.add_trace(
+        go.Scatter3d(
+            x=[x_val],
+            y=[y_val],
+            z=[z_val],
+            mode='markers',
+            marker=dict(size=5, color='black'),
+            hoverinfo='skip',
+            showlegend=False,
+        )
+    )
+    annotation_dict_K = dict(
+                    x=x_val,
+                    y=y_val,
+                    z=z_val,
+                    text='<b>K</b>',
+                    showarrow=False,
+                    font=dict(size=25, color='black'),
+                    # Pixel offsets to bring the label closer (negative moves it up)
+                    yshift=8,   # adjust this value
+                    xshift=15,
+                )
+
+
+    fig.update_layout(
+        scene=dict(
+            annotations=[
+                annotation_dict_G, annotation_dict_M, annotation_dict_K
+            ]
+        )
+    )
+
+
+    theta=np.radians(30)
+    viewx, viewy = np.array([np.cos(theta), np.sin(np.radians(180)-theta)]) * 1.9
+    fig.update_layout(
+
+        # ==========================================================
+        # Overall figure
+        # ==========================================================
+        width=900,
+        height=700,
+
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+
+        margin=dict(
+            l=0,
+            r=0,
+            b=0,
+            t=20,
+        ),
+
+        font=dict(
+            family='Times New Roman',
+            size=18,
+            color='black',
+        ),
+
+        # ==========================================================
+        # 3D scene
+        # ==========================================================
+        scene=dict(
+
+            # ------------------------------------------------------
+            # X axis
+            # ------------------------------------------------------
+            xaxis=dict(
+                title=dict(
+                    text='<i>k</i><sub>x</sub>',
+                    font=dict(
+                        family='Times New Roman',
+                        size=28,
+                        color='black',
+                    ),
+                ),
+
+                range=[-0.3, 0.3],
+                autorange=False,
+
+                tickfont=dict(
+                    family='Times New Roman',
+                    size=16,
+                    color='black',
+                ),
+
+                nticks=7,
+
+                showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=1,
+
+                showline=True,
+                linecolor='black',
+                linewidth=2,
+
+                zeroline=False,
+
+                ticks='outside',
+                ticklen=5,
+                tickwidth=1.5,
+
+                backgroundcolor='white',
+            ),
+
+            # ------------------------------------------------------
+            # Y axis
+            # ------------------------------------------------------
+            yaxis=dict(
+                title=dict(
+                    text='<i>k</i><sub>y</sub>',
+                    font=dict(
+                        family='Times New Roman',
+                        size=28,
+                        color='black',
+                    ),
+                ),
+
+                range=[-0.3, 0.3],
+                autorange=False,
+
+                tickfont=dict(
+                    family='Times New Roman',
+                    size=16,
+                    color='black',
+                ),
+
+                nticks=7,
+
+                showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=1,
+
+                showline=True,
+                linecolor='black',
+                linewidth=2,
+
+                zeroline=False,
+
+                ticks='outside',
+                ticklen=5,
+                tickwidth=1.5,
+
+                backgroundcolor='white',
+            ),
+
+            # ------------------------------------------------------
+            # Z axis
+            # ------------------------------------------------------
+            zaxis=dict(
+                title=dict(
+                    text='',
+                    font=dict(
+                        family='Times New Roman',
+                        size=22,
+                        color='black',
+                    ),
+                ),
+
+                range=[-0.25, 0.15],
+                autorange=False,
+
+                tickfont=dict(
+                    family='Times New Roman',
+                    size=15,
+                    color='black',
+                ),
+
+                nticks=6,
+
+                showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=1,
+
+                showline=True,
+                linecolor='black',
+                linewidth=2,
+
+                zeroline=False,
+
+                ticks='outside',
+                ticklen=5,
+                tickwidth=1.5,
+
+                backgroundcolor='white',
+            ),
+
+            # ------------------------------------------------------
+            # Physical / visual aspect ratio
+            # ------------------------------------------------------
+            aspectmode='manual',
+
+            aspectratio=dict(
+                x=1,
+                y=1,
+                z=0.7,
+            ),
+
+            # ------------------------------------------------------
+            # Camera
+            # ------------------------------------------------------
+            camera=dict(
+                eye=dict(
+                    x=viewx,
+                    y=viewy,
+                    z=1.3,
+                ),
+
+                center=dict(
+                    x=0,
+                    y=0,
+                    z=0,
+                ),
+
+                up=dict(
+                    x=0,
+                    y=0,
+                    z=1,
+                ),
+            ),
+
+            bgcolor='white',
+        ),
+    )
+
+    ############ Plotting a plane at z=0
+    xplane = np.array([
+        [-0.3,  0.3],
+        [-0.3,  0.3]
+    ])
+
+    yplane = np.array([
+        [-0.3, -0.3],
+        [ 0.3,  0.3]
+    ])
+
+    zplane = np.zeros_like(xplane)
+
+    fig.add_trace(
+        go.Surface(
+            x=xplane,
+            y=yplane,
+            z=zplane,
+
+            colorscale=[
+                [0, 'rgba(160,160,160,0.8)'],
+                [1, 'rgba(160,160,160,0.8)']
+            ],
+
+            showscale=False,
+            hoverinfo='skip',
+            name='E = 0',
+
+            contours={
+            'x': {'show': True, 'color': 'black', 'width': 1, 'start': -5, 'end': 5, 'size': 1},
+            'y': {'show': True, 'color': 'black', 'width': 1, 'start': -5, 'end': 5, 'size': 1},
+        },
+        )
+    )
+
+
+    ######### Update z annotation
+    fig.add_annotation(
+        text='<i>E</i> (eV)',
+        x=0.03,
+        y=0.50,
+        xref='paper',
+        yref='paper',
+        textangle=-90,
+        showarrow=False,
+        font=dict(
+            family='Times New Roman',
+            size=26,
+            color='black',
+        ),
+    )
+
+    fig.add_annotation(
+        text=f'<i>kz={at_kz:.4f}</i>',
+        x=0.9,
+        y=0.70,
+        xref='paper',
+        yref='paper',
+        textangle=-90,
+        showarrow=False,
+        font=dict(
+            family='Times New Roman',
+            size=26,
+            color='black',
+        ),
+    )
+
+    # 1. Interactive HTML (recommended — keeps zoom/rotate)
+    # fig.write_html("in-plane-energy.html")
+
+    # 2. Static image (PNG, PDF, SVG, JPEG)
+    # Requires: pip install kaleido
+    # filename = f"Nb3S4-E(kx,ky)-plotly-2c-kz{at_kz:.4f}.png"
+    # print(filename)
+    # fig.write_image(filename, scale=2)   # 2x resolution
+
+    # fig.show()
+    return fig
+
+def plot_edges():
+
+
+    pass
+
 
 
 
@@ -419,7 +1200,6 @@ def plot_and_save_bands_velocity_imass_v2(filename, energy, velocity, curvature,
         ax.autoscale(enable=True, axis="x", tight=True)
 
     plt.savefig(filename)
-
 
 
 

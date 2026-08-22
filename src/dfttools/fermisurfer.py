@@ -50,6 +50,7 @@ def read_frmsf(filename):
         'nspin': nspin,
         'nband': nband,
         'bvec': bvec,
+        'bvec_format': "vstack[b1, b2, b3]",
         'energy': bands,
         'scalar': color_matrix,
         'n_scalar_blocks': len(color_matrix)
