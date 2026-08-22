@@ -209,14 +209,15 @@ class MPHelper:
         pass
 
 
-
-    def plot_bands(self):
+    def plot_bands(self, legend_line=-1):
         width_ratios = list(map(lambda x: x['end_index']-x['start_index'], self.bs.branches))
         # print(width_ratios)
         fig, axes = plt.subplots(1, len(self.bs.branches), figsize=(10, 6), sharey=True, gridspec_kw={"width_ratios": width_ratios}, dpi=200)
 
         axes[0].set_ylabel(r"$E-E_F (eV)$")
+        legend_line = legend_line if legend_line >= 0 else len(self.bs.branches)-1
         branch_count = len(self.bs.branches)
+        flag = True
         for i in range(branch_count):
             jj = i
             kk = i
@@ -231,14 +232,20 @@ class MPHelper:
             x = np.linspace(0, 5, ebands.shape[1])
             y = ebands.T - self.bs.efermi
             # print(y.shape)
-            if i == branch_count-1:
-                label_line  = axes[i].plot(x, y, 'r-')
+
+            if (i == legend_line) & flag:
+                print("plotting that line******************* ", x.shape, y.shape)
+                flag = False
+                label_line  = axes[i].plot(x, y[:,0], 'r-', label="MP")
+                label_line  = axes[i].plot(x, y[:,0:], 'r-', label="MP")
             else:
                 axes[i].plot(x, y, 'r-')
             axes[i].set_xlabel(r"${}$".format(self.bs.branches[jj]['name']))
             axes[i].set_xlim(x[0], x[-1])
             axes[i].set_xticks([])
-
+            pass
+        
+        axes[legend_line].legend()
 
         return fig, axes, label_line
 
