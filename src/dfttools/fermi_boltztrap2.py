@@ -292,11 +292,37 @@ def get_uniform_nk_interpolate(
 
 
 
-def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_scale=(-1,1), at_kz=0, fig=None, edges=None):
+def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1), 
+                 at_kz=0, fig=None, edges=None, plane_at_z=None,
+                 high_sym_points_dots=True, high_sym_points_label=True,
+                 color_bar_dict={
+    'text' : (
+                        '(1/<i>m</i><sub>xx</sub><sup>*</sup> + '
+                        '1/<i>m</i><sub>yy</sub><sup>*</sup>)'
+                        '<i>m</i><sub>e</sub>/2 '
+                    ),
+    'tickvals' : [-1, -0.5, 0, 0.5, 1],
+                },
+                colorscale=[
+                            [0.0, "rgb(0, 0, 180)"],      # deep blue
+                            [0.35, "rgb(120, 170, 255)"], # light blue
+                            [0.5, "rgb(255, 255, 255)"],  # white at center
+                            [0.65, "rgb(255, 120, 120)"], # light red
+                            [1.0, "rgb(180, 0, 0)"]       # deep red
+                    ]
+                    ):
     """
     KX_bz, KY_bz  : (nk1,nk2) shapred array
     Energy        : of a single band shaped (nk1,nk2)
     surface_color : color scheme of a single band shapred (nk1,nk2)
+    colorscale    : default [
+                            [0.0, "rgb(0, 0, 180)"],      # deep blue
+                            [0.35, "rgb(120, 170, 255)"], # light blue
+                            [0.5, "rgb(255, 255, 255)"],  # white at center
+                            [0.65, "rgb(255, 120, 120)"], # light red
+                            [1.0, "rgb(180, 0, 0)"]       # deep red
+                    ]
+                    you can use jet, viridis and any color in plotly.express.colors.named_colorscales()
     
     """
     if fig is None:
@@ -327,11 +353,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_scale=(-1,1), at_kz=
             # ),
             colorbar=dict(
                 title=dict(
-                    text=(
-                        '(1/<i>m</i><sub>xx</sub><sup>*</sup> + '
-                        '1/<i>m</i><sub>yy</sub><sup>*</sup>)'
-                        '<i>m</i><sub>e</sub>/2 '
-                    ),
+                    text=color_bar_dict['text'],
                     side='right',
                     font=dict(
                         family='Times New Roman',
@@ -359,14 +381,17 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_scale=(-1,1), at_kz=
                 ),
 
                 tickmode='array',
-                tickvals=[-1, -0.5, 0, 0.5, 1],
-                ticktext=['-1.0', '-0.5', '0.0', '0.5', '1.0'],
+                # tickvals=[-1, -0.5, 0, 0.5, 1],
+                # ticktext=['-1.0', '-0.5', '0.0', '0.5', '1.0'],
+
+                tickvals=[a for a in np.linspace(color_range[0], color_range[1], 5)],
+                ticktext=[f"{a:.2f}" for a in np.linspace(color_range[0], color_range[1], 5)],
 
                 outlinewidth=1,
                 outlinecolor='black',
             ),
-            cmin=color_scale[0],    # hides surface where z < -2
-            cmax=color_scale[1],     # hides surface where z > 2
+            cmin=color_range[0],    # hides surface where z < -2
+            cmax=color_range[1],     # hides surface where z > 2
             opacity=1.0,
             # Remove mesh lines
             hidesurface=False,
@@ -431,92 +456,93 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_scale=(-1,1), at_kz=
 
 
     ########## Gamma, M and K point
-
-    x_val, y_val, z_val = 0, 0, 0.017
-    fig.add_trace(
-        go.Scatter3d(
-            x=[x_val],
-            y=[y_val],
-            z=[z_val],
-            mode='markers',
-            marker=dict(size=5, color='black'),
-            hoverinfo='skip',
-            showlegend=False,
+    if high_sym_points_dots:
+        x_val, y_val, z_val = 0, 0, 0.017
+        z_val = 0
+        fig.add_trace(
+            go.Scatter3d(
+                x=[x_val],
+                y=[y_val],
+                z=[z_val],
+                mode='markers',
+                marker=dict(size=5, color='black'),
+                hoverinfo='skip',
+                showlegend=False,
+            )
         )
-    )
 
-    # Add the 3D annotation via layout update
-    annotation_dict_G = dict(
-                    x=x_val,
-                    y=y_val,
-                    z=z_val,
-                    text='<b>Γ</b>',
-                    showarrow=False,
-                    font=dict(size=25, color='black'),
-                    # Pixel offsets to bring the label closer (negative moves it up)
-                    yshift=6,   # adjust this value
-                    xshift=-8,
+        # Add the 3D annotation via layout update
+        annotation_dict_G = dict(
+                        x=x_val,
+                        y=y_val,
+                        z=z_val,
+                        text='<b>Γ</b>',
+                        showarrow=False,
+                        font=dict(size=25, color='black'),
+                        # Pixel offsets to bring the label closer (negative moves it up)
+                        yshift=6,   # adjust this value
+                        xshift=-8,
+                    )
+
+
+        x_val, y_val = 0, 0.2
+        
+        fig.add_trace(
+            go.Scatter3d(
+                x=[x_val],
+                y=[y_val],
+                z=[z_val],
+                mode='markers',
+                marker=dict(size=5, color='black'),        
+                hoverinfo='skip',
+                showlegend=False,
+            )
+        )
+        annotation_dict_M = dict(
+                        x=x_val,
+                        y=y_val,
+                        z=z_val,
+                        text='<b>M</b>',
+                        showarrow=False,
+                        font=dict(size=25, color='black'),
+                        # Pixel offsets to bring the label closer (negative moves it up)
+                        yshift=8,   # adjust this value
+                        xshift=20,
+                    )
+
+
+        x_val=-0.1156
+        fig.add_trace(
+            go.Scatter3d(
+                x=[x_val],
+                y=[y_val],
+                z=[z_val],
+                mode='markers',
+                marker=dict(size=5, color='black'),
+                hoverinfo='skip',
+                showlegend=False,
+            )
+        )
+        annotation_dict_K = dict(
+                        x=x_val,
+                        y=y_val,
+                        z=z_val,
+                        text='<b>K</b>',
+                        showarrow=False,
+                        font=dict(size=25, color='black'),
+                        # Pixel offsets to bring the label closer (negative moves it up)
+                        yshift=8,   # adjust this value
+                        xshift=15,
+                    )
+
+        if high_sym_points_label:
+            fig.update_layout(
+                scene=dict(
+                    annotations=[
+                        annotation_dict_G, annotation_dict_M, annotation_dict_K
+                    ]
                 )
-
-
-    x_val, y_val, z_val = 0, 0.2, 0.017
-
-    fig.add_trace(
-        go.Scatter3d(
-            x=[x_val],
-            y=[y_val],
-            z=[z_val],
-            mode='markers',
-            marker=dict(size=5, color='black'),        
-            hoverinfo='skip',
-            showlegend=False,
-        )
-    )
-    annotation_dict_M = dict(
-                    x=x_val,
-                    y=y_val,
-                    z=z_val,
-                    text='<b>M</b>',
-                    showarrow=False,
-                    font=dict(size=25, color='black'),
-                    # Pixel offsets to bring the label closer (negative moves it up)
-                    yshift=8,   # adjust this value
-                    xshift=20,
-                )
-
-
-    x_val=-0.1156
-    fig.add_trace(
-        go.Scatter3d(
-            x=[x_val],
-            y=[y_val],
-            z=[z_val],
-            mode='markers',
-            marker=dict(size=5, color='black'),
-            hoverinfo='skip',
-            showlegend=False,
-        )
-    )
-    annotation_dict_K = dict(
-                    x=x_val,
-                    y=y_val,
-                    z=z_val,
-                    text='<b>K</b>',
-                    showarrow=False,
-                    font=dict(size=25, color='black'),
-                    # Pixel offsets to bring the label closer (negative moves it up)
-                    yshift=8,   # adjust this value
-                    xshift=15,
-                )
-
-
-    fig.update_layout(
-        scene=dict(
-            annotations=[
-                annotation_dict_G, annotation_dict_M, annotation_dict_K
-            ]
-        )
-    )
+            )
 
 
     theta=np.radians(30)
@@ -712,39 +738,40 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_scale=(-1,1), at_kz=
     )
 
     ############ Plotting a plane at z=0
-    xplane = np.array([
-        [-0.3,  0.3],
-        [-0.3,  0.3]
-    ])
+    if plane_at_z is not None:
+        xplane = np.array([
+            [-0.3,  0.3],
+            [-0.3,  0.3]
+        ])
 
-    yplane = np.array([
-        [-0.3, -0.3],
-        [ 0.3,  0.3]
-    ])
+        yplane = np.array([
+            [-0.3, -0.3],
+            [ 0.3,  0.3]
+        ])
 
-    zplane = np.zeros_like(xplane)
+        zplane = np.ones_like(xplane)*plane_at_z
 
-    fig.add_trace(
-        go.Surface(
-            x=xplane,
-            y=yplane,
-            z=zplane,
+        fig.add_trace(
+            go.Surface(
+                x=xplane,
+                y=yplane,
+                z=zplane,
 
-            colorscale=[
-                [0, 'rgba(160,160,160,0.8)'],
-                [1, 'rgba(160,160,160,0.8)']
-            ],
+                colorscale=[
+                    [0, 'rgba(160,160,160,0.6)'],
+                    [1, 'rgba(160,160,160,0.6)']
+                ],
 
-            showscale=False,
-            hoverinfo='skip',
-            name='E = 0',
+                showscale=False,
+                hoverinfo='skip',
+                name='E = 0',
 
-            contours={
-            'x': {'show': True, 'color': 'black', 'width': 1, 'start': -5, 'end': 5, 'size': 1},
-            'y': {'show': True, 'color': 'black', 'width': 1, 'start': -5, 'end': 5, 'size': 1},
-        },
+                contours={
+                'x': {'show': True, 'color': 'black', 'width': 1, 'start': -5, 'end': 5, 'size': 1},
+                'y': {'show': True, 'color': 'black', 'width': 1, 'start': -5, 'end': 5, 'size': 1},
+            },
+            )
         )
-    )
 
 
     ######### Update z annotation
@@ -796,7 +823,53 @@ def plot_edges():
     pass
 
 
+def plot_E_kx_ky_btp(dft_data, bt2filnam, niter, band_ids, nk1, nk2, nk3, ikz=0):
+    """
+    dft_data, bt2filnam, niter : check load_interpolation()
 
+    band_ids : tuple of bands to be plotted
+    nk1, nk2 : number of k-points along k1 and k2 axes for interpolation
+    at_kz    : the kz slice 
+    
+    """
+    data, equivalences, coeffs = compute.load_interpolation(dft_data, bt2filnam, niter)
+    lattvec = data.get_lattvec()
+    reciprocal_lattice_vec = np.linalg.inv(lattvec)*2*np.pi
+    bg = reciprocal_lattice_vec
+
+    k1 = np.linspace(0, 1.0, nk1)
+    k2 = np.linspace(0, 1.0, nk2)
+    k3 = np.linspace(0, 1.0, nk3)
+    KX_frac, KY_frac, KZ_frac = np.meshgrid(k1, k2, k3, indexing='ij')
+
+    k_frac_grid = np.column_stack((KX_frac.ravel(), KY_frac.ravel(), KZ_frac.ravel()))
+
+    K_grid, energy_grid, velocity_grid, curvature_grid = get_uniform_k_grid_interpolate(
+        data, equivalences, coeffs,
+        nk1, nk2, nk3, k_frac_grid,
+        band_ids=band_ids,)
+
+
+    iband=[i for i in range(len(band_ids))]
+
+    mat_xx = curvature_grid[iband,0,0,:,:,ikz]
+    mat_yy = curvature_grid[iband,1,1,:,:,ikz]
+    imass = (mat_xx + mat_yy)/2.
+
+
+    k_bz_grid = frac_to_cartesian(k_frac_grid.T, bg)
+
+
+    KX_bz = k_bz_grid[0, :].reshape(KX_frac.shape)
+    KY_bz = k_bz_grid[1, :].reshape(KY_frac.shape)
+
+
+    Energy = (energy_grid[iband,:,:,ikz]-data.fermi)/units.eV
+
+    fig = plot_E_kx_ky(KX_bz, KY_bz, Energy, imass, at_kz=k_bz_grid[2,ikz])
+
+
+    return fig
 
 
 def generate_band_path(kpath, cell, nkpoints):
