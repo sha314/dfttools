@@ -295,6 +295,7 @@ def get_uniform_nk_interpolate(
 def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1), 
                  at_kz=0, fig=None, edges=None, plane_at_z=None,
                  high_sym_points_dots=True, high_sym_points_label=True,
+                 aspect_ratio=(1,1,0.7),
                  color_bar_dict={
     'text' : (
                         '(1/<i>m</i><sub>xx</sub><sup>*</sup> + '
@@ -545,8 +546,9 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
             )
 
 
-    theta=np.radians(30)
-    viewx, viewy = np.array([np.cos(theta), np.sin(np.radians(180)-theta)]) * 1.9
+    theta=np.radians(50)
+    viewx, viewy = np.array([np.cos(theta), np.sin(np.radians(180)-theta)]) * 2.24
+    viewz = 1.34
     fig.update_layout(
 
         # ==========================================================
@@ -599,6 +601,8 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                 ),
 
                 nticks=7,
+                tickvals=[-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3],
+                ticktext=[f"{a:.1f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]],
 
                 showgrid=True,
                 gridcolor='lightgray',
@@ -640,6 +644,8 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                 ),
 
                 nticks=7,
+                tickvals=[-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3],
+                ticktext=[f"{a:.1f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]],
 
                 showgrid=True,
                 gridcolor='lightgray',
@@ -671,7 +677,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     ),
                 ),
 
-                range=[-0.25, 0.15],
+                range=[-0.202, 0.1],
                 autorange=False,
 
                 tickfont=dict(
@@ -680,7 +686,9 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     color='black',
                 ),
 
-                nticks=6,
+                nticks=9,
+                tickvals=[-0.15, -0.1, -0.05, 0, 0.05, 0.1],
+                ticktext=[f"{a:.2f}" for a in [-0.15, -0.1, -0.05, 0, 0.05, 0.1]],
 
                 showgrid=True,
                 gridcolor='lightgray',
@@ -697,6 +705,10 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                 tickwidth=1.5,
 
                 backgroundcolor='white',
+
+                # visible=False,
+                # showticklabels=False,
+                # showgrid=False,
             ),
 
             # ------------------------------------------------------
@@ -705,9 +717,9 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
             aspectmode='manual',
 
             aspectratio=dict(
-                x=1,
-                y=1,
-                z=0.7,
+                x=aspect_ratio[0],
+                y=aspect_ratio[1],
+                z=aspect_ratio[2],
             ),
 
             # ------------------------------------------------------
@@ -717,7 +729,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                 eye=dict(
                     x=viewx,
                     y=viewy,
-                    z=1.3,
+                    z=viewz,
                 ),
 
                 center=dict(
@@ -774,36 +786,8 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
         )
 
 
-    ######### Update z annotation
-    fig.add_annotation(
-        text='<i>E</i> (eV)',
-        x=0.03,
-        y=0.50,
-        xref='paper',
-        yref='paper',
-        textangle=-90,
-        showarrow=False,
-        font=dict(
-            family='Times New Roman',
-            size=26,
-            color='black',
-        ),
-    )
-
-    fig.add_annotation(
-        text=f'<i>kz={at_kz:.4f}</i>',
-        x=0.9,
-        y=0.70,
-        xref='paper',
-        yref='paper',
-        textangle=-90,
-        showarrow=False,
-        font=dict(
-            family='Times New Roman',
-            size=26,
-            color='black',
-        ),
-    )
+    
+    
 
     # 1. Interactive HTML (recommended — keeps zoom/rotate)
     # fig.write_html("in-plane-energy.html")
@@ -817,19 +801,286 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
     # fig.show()
     return fig
 
+
+
+def add_annotations(fig, E_label=None, at_kz=None):
+    """
+    adding annotation later might be usefull for some cases.
+    
+    """
+    if E_label is not None:
+        fig.add_annotation(
+            text='<i>E</i> (eV)',
+            x=0.06,
+            y=0.50,
+            xref='paper',
+            yref='paper',
+            textangle=-90,
+            showarrow=False,
+            font=dict(
+                family='Times New Roman',
+                size=26,
+                color='black',
+            ),
+        )
+
+    if at_kz is not None:
+        fig.add_annotation(
+            text=f'<i>kz={at_kz:.4f}</i>',
+            x=0.9,
+            y=0.70,
+            xref='paper',
+            yref='paper',
+            textangle=-90,
+            showarrow=False,
+            font=dict(
+                family='Times New Roman',
+                size=26,
+                color='black',
+            ),
+        )
+    return fig
+
+
+def update_layout_for_kx_ky_plane(fig):
+    """
+    When only the 2D view (kx-ky) plane is needed, 
+    this method is helpful
+    """
+    fig.update_layout(
+        # ==========================================================
+        # Overall figure
+        # ==========================================================
+        width=900,
+        height=700,
+
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+
+        margin=dict(
+            l=80,
+            r=80,
+            b=80,
+            t=50,
+        ),
+
+        font=dict(
+            family='Times New Roman',
+            size=18,
+            color='black',
+        ),
+
+        # ==========================================================
+        # 3D scene
+        # ==========================================================
+        scene=dict(
+
+            # ------------------------------------------------------
+            # X axis
+            # ------------------------------------------------------
+            xaxis=dict(
+                title=dict(text=''),
+
+                range=[-0.3, 0.3],
+                autorange=False,
+
+                tickfont=dict(
+                    family='Times New Roman',
+                    size=16,
+                    color='black',
+                ),
+
+                nticks=7,
+                tickvals=[-0.2, -0.1, 0, 0.1, 0.2, 0.3],
+                ticktext=[f"{a:.1f}" for a in [-0.2, -0.1, 0, 0.1, 0.2, 0.3]],
+
+                showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=1,
+
+                showline=True,
+                linecolor='black',
+                linewidth=2,
+
+                zeroline=False,
+
+                ticks='outside',
+                ticklen=5,
+                tickwidth=1.5,
+
+                backgroundcolor='white',
+            ),
+
+            # ------------------------------------------------------
+            # Y axis
+            # ------------------------------------------------------
+            yaxis=dict(
+                title=dict(text=''),
+
+                range=[-0.3, 0.3],
+                autorange=False,
+
+                tickfont=dict(
+                    family='Times New Roman',
+                    size=16,
+                    color='black',
+                ),
+
+                nticks=7,
+                tickvals=[-0.3, -0.2, -0.1, 0, 0.1, 0.2],
+                ticktext=[f"{a:.1f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2]],
+
+                showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=1,
+
+                showline=True,
+                linecolor='black',
+                linewidth=2,
+
+                zeroline=False,
+
+                ticks='outside',
+                ticklen=5,
+                tickwidth=1.5,
+
+                backgroundcolor='white',
+            ),
+
+            # ------------------------------------------------------
+            # Z axis
+            # ------------------------------------------------------
+            zaxis=dict(
+                title=dict(
+                    text='',
+                    font=dict(
+                        family='Times New Roman',
+                        size=22,
+                        color='black',
+                    ),
+                ),
+
+
+                # showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=1,
+
+                showline=True,
+                linecolor='black',
+                linewidth=2,
+
+                zeroline=False,
+
+                ticks='outside',
+                ticklen=5,
+                tickwidth=1.5,
+
+                backgroundcolor='white',
+
+                visible=False,
+                showticklabels=False,
+                showgrid=False,
+            ),
+
+            # ------------------------------------------------------
+            # Physical / visual aspect ratio
+            # ------------------------------------------------------
+            aspectmode='manual',
+
+            aspectratio=dict(
+                x=1,
+                y=1,
+                z=1,
+            ),
+
+            # ------------------------------------------------------
+            # Camera
+            # ------------------------------------------------------
+            camera=dict(
+                eye=dict(
+                    x=0,
+                    y=0,
+                    z=2,
+                ),
+
+                center=dict(
+                    x=0,
+                    y=0,
+                    z=0,
+                ),
+
+                up=dict(
+                    x=0,
+                    y=1,
+                    z=0,
+                ),
+            ),
+
+            bgcolor='white',
+        ),
+    )
+
+
+    fig.add_annotation(
+        text=f'<i>k<sub>x</sub></i>',
+        x=0.5,
+        y=1.09,
+        xref='paper',
+        yref='paper',
+        textangle=0,
+        showarrow=False,
+        font=dict(
+            family='Times New Roman',
+            size=26,
+            color='black',
+        ),
+    )
+
+
+    fig.add_annotation(
+        text=f'<i>k<sub>y</sub></i>',
+        x=0.07,
+        y=0.5,
+        xref='paper',
+        yref='paper',
+        textangle=-90,
+        showarrow=False,
+        font=dict(
+            family='Times New Roman',
+            size=26,
+            color='black',
+        ),
+    )
+    return fig
+
+
+
+
 def plot_edges():
 
 
     pass
 
 
-def plot_E_kx_ky_btp(dft_data, bt2filnam, niter, band_ids, nk1, nk2, nk3, ikz=0):
+def plot_E_kx_ky_btp(dft_data, bt2filnam, niter, band_ids, nk1, nk2, nk3, ikz=0,
+                      surface_color_spec="in-plane-imass", saveas=None):
     """
+    Plots E(kx, ky) surface using (1/mxx + 1/myy)/2 as surface color by default.
+
     dft_data, bt2filnam, niter : check load_interpolation()
 
     band_ids : tuple of bands to be plotted
     nk1, nk2 : number of k-points along k1 and k2 axes for interpolation
     at_kz    : the kz slice 
+
+    surface_color_spec : 
+            in-plane-imass         : (1/mxx + 1/myy)/2
+            out-of-plane-imass     : 1/mzz
+            in-plane-velocity      : (vx+vy)/2
+            out-of-plane-velocity  : vz
+
+
+    saveas : output image name (png or pdf or html?)
     
     """
     data, equivalences, coeffs = compute.load_interpolation(dft_data, bt2filnam, niter)
@@ -840,22 +1091,39 @@ def plot_E_kx_ky_btp(dft_data, bt2filnam, niter, band_ids, nk1, nk2, nk3, ikz=0)
     k1 = np.linspace(0, 1.0, nk1)
     k2 = np.linspace(0, 1.0, nk2)
     k3 = np.linspace(0, 1.0, nk3)
-    KX_frac, KY_frac, KZ_frac = np.meshgrid(k1, k2, k3, indexing='ij')
+    KX_frac, KY_frac = np.meshgrid(k1, k2, indexing='ij')
 
-    k_frac_grid = np.column_stack((KX_frac.ravel(), KY_frac.ravel(), KZ_frac.ravel()))
+    k_frac_grid = np.column_stack([KX_frac.ravel(), KY_frac.ravel(), np.ones(KY_frac.ravel())*k3[ikz]])
 
     K_grid, energy_grid, velocity_grid, curvature_grid = get_uniform_k_grid_interpolate(
         data, equivalences, coeffs,
-        nk1, nk2, nk3, k_frac_grid,
+        nk1, nk2, 1, k_frac_grid,
         band_ids=band_ids,)
 
 
     iband=[i for i in range(len(band_ids))]
+    color_spec_list={
+            "in-plane-imass", "out-of-plane-imass", "in-plane-velocity", "out-of-plane-velocity"
+    }
 
     mat_xx = curvature_grid[iband,0,0,:,:,ikz]
     mat_yy = curvature_grid[iband,1,1,:,:,ikz]
-    imass = (mat_xx + mat_yy)/2.
-
+    surf_color = (mat_xx + mat_yy)/2.
+    if surface_color_spec is color_spec_list[0]:
+        # the default is already chosen
+        pass
+    elif surface_color_spec is color_spec_list[1]:
+        surf_color = curvature_grid[iband,2,2,:,:,ikz]
+        pass
+    elif surface_color_spec is color_spec_list[2]:
+        surf_color = (velocity_grid[iband,0,:,:,ikz] + velocity_grid[iband,1,:,:,ikz])/2
+        pass
+    elif surface_color_spec is color_spec_list[3]:
+        surf_color = velocity_grid[iband,2,:,:,ikz]
+        pass
+    else:
+        print("No valid surface color is specified, using default ", color_spec_list[0])
+        pass
 
     k_bz_grid = frac_to_cartesian(k_frac_grid.T, bg)
 
@@ -866,7 +1134,7 @@ def plot_E_kx_ky_btp(dft_data, bt2filnam, niter, band_ids, nk1, nk2, nk3, ikz=0)
 
     Energy = (energy_grid[iband,:,:,ikz]-data.fermi)/units.eV
 
-    fig = plot_E_kx_ky(KX_bz, KY_bz, Energy, imass, at_kz=k_bz_grid[2,ikz])
+    fig = plot_E_kx_ky(KX_bz, KY_bz, Energy, surf_color, at_kz=k_bz_grid[2,ikz])
 
 
     return fig
@@ -1037,7 +1305,7 @@ def extract_kpath_data(
 
 def extract_kpath_interpolate(
         data, equivalences, coeffs,
-    kpath,          # tuple(kpath_string, nkpoints_list) or None for default
+    kpath_list,          # tuple(kpath_string, nkpoints_list) or None for default
     nkpoints_list,
     band_ids=None,
 ):
@@ -1092,7 +1360,7 @@ def extract_kpath_interpolate(
         coeffs_tmp = coeffs[band_ids,:]
         pass
 
-    kpaths = parse_k_path(kpath)
+    kpaths = parse_k_path(kpath_list)
     
     for ikpath, kpath in enumerate(kpaths):
         print("k path #{}".format(ikpath + 1))
@@ -1117,7 +1385,7 @@ def extract_kpath_interpolate(
 
 
 
-def plot_and_save_bands_velocity_imass(filename, energy, velocity, curvature, ib, nkpoints_list, labels, efermi, band_color='blue'):
+def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints_list, labels, efermi, band_color='blue', filename=None):
     fig, axes = plt.subplots(3, len(energy), figsize=(15, 6), sharey="row", gridspec_kw={
         "width_ratios": nkpoints_list,
         "wspace":0,
@@ -1184,8 +1452,12 @@ def plot_and_save_bands_velocity_imass(filename, energy, velocity, curvature, ib
 
         ax.margins(x=0)           # remove all x-padding
         ax.autoscale(enable=True, axis="x", tight=True)
-
-    plt.savefig(filename)
+    if filename is not None:
+        plt.savefig(filename)
+        pass
+    else:
+        pass
+    return fig, axes
     pass
 
 
@@ -1357,21 +1629,22 @@ def method_2(data, equivalences, coeffs):
 
     kpoints, energy, velocity, curvature = extract_kpath_interpolate(data, equivalences, coeffs, kpath_str, nkpoints_list)
 
-    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{61}.png", 
-                                                    energy, velocity, curvature, 61, 
-                                                    nkpoints_list, labels, data.fermi, band_color='red')
+    plot_and_save_bands_velocity_imass( energy, velocity, curvature, 61, 
+                                        nkpoints_list, labels, data.fermi, band_color='red',
+                                        filename=f"Nb3S4-bt2-bands-velocity-curvature-ib{61}.png")
+
+    plot_and_save_bands_velocity_imass( energy, velocity, curvature, 62, 
+                                        nkpoints_list, labels, data.fermi, band_color='green',
+                                        filename=f"Nb3S4-bt2-bands-velocity-curvature-ib{62}.png")
+
+    plot_and_save_bands_velocity_imass( energy, velocity, curvature, 63, 
+                                        nkpoints_list, labels, data.fermi, band_color='blue',
+                                        filename=f"Nb3S4-bt2-bands-velocity-curvature-ib{63}.png")
+
+    plot_and_save_bands_velocity_imass( energy, velocity, curvature, 64, 
+                                        nkpoints_list, labels, data.fermi, band_color='k',
+                                        filename=f"Nb3S4-bt2-bands-velocity-curvature-ib{64}.png")
     
-    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{62}.png", 
-                                                    energy, velocity, curvature, 62, 
-                                                    nkpoints_list, labels, data.fermi, band_color='green')
-    
-    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{63}.png", 
-                                                    energy, velocity, curvature, 63, 
-                                                    nkpoints_list, labels, data.fermi, band_color='blue')
-    
-    plot_and_save_bands_velocity_imass(f"Nb3S4-bt2-bands-velocity-curvature-ib{64}.png", 
-                                                    energy, velocity, curvature, 64, 
-                                                    nkpoints_list, labels, data.fermi, band_color='orange')
 
     pass
 
