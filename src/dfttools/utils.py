@@ -423,7 +423,8 @@ def parse_matdyn(file_matdyn_in):
         if prev_line is not None:
             segment_length = prev_line['nk']
             
-            # segment_length == 1 means the path doesn't contain any new points
+            if segment_length == 1: #means the path doesn't contain any new points
+                index_counter += 1
             if segment_length > 1:
                 prev_label = prev_line['label']
                 if prev_label == gamma:
