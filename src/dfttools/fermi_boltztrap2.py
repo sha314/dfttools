@@ -20,6 +20,62 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 
+
+
+def plot_high_sym_kz_btp_bands(energy, ib, nkpoints_list, labels, efermi,
+                                    band_color='blue', axes=None, filename=None, 
+                                    component=None, ylim=(-1,1), to_eV=True, kz=0):
+    """
+    
+    ylim : in eV
+    """
+    if axes is None:
+        fig, axes = plt.subplots(1, len(energy), figsize=(8, 6), sharey="row", gridspec_kw={
+            "width_ratios": nkpoints_list,
+            "wspace":0,
+            "hspace":0
+            }, dpi=300)
+    if to_eV:
+        HA_TO_EV = 27.21138602581037
+    else:
+        HA_TO_EV = 1.
+    for k in range(len(energy)):
+        x = np.linspace(0, 1, energy[k].shape[1])
+        ax = axes[k]
+        # ax.plot(x, (energy[k][ib].T-efermi)*HA_TO_EV, label=f"E(K),{ib},k_z={kz}", color=band_color)
+        ax.plot(x, (energy[k][ib].T-efermi)*HA_TO_EV, label=r"$k_z=$"+f"{kz}", color=band_color)
+        ax.axhline(0, 0, 10, color='k', linestyle=":")
+        if k == 6:
+            ax.legend(framealpha=0.3)
+        if k == 0:
+            if to_eV:
+                ax.set_ylabel(r"$E-E_F (eV)$",  fontsize=20)    
+            else:
+                ax.set_ylabel(r"$E-E_F (Ha)$")
+        # ax.set_xlabel(f"{labels[k]}")
+        ax.set_ylim(ylim)
+
+        ax.set_xticks([])
+        pass
+    for ax in axes.flat:
+        # Y-axis spine
+        ax.spines["left"].set_alpha(0.3)
+        ax.spines["right"].set_alpha(0.3)
+
+        # X-axis spine
+        ax.spines["bottom"].set_linewidth(1.2)
+        ax.spines["top"].set_linewidth(1.2)
+
+        ax.margins(x=0)           # remove all x-padding
+        ax.autoscale(enable=True, axis="x", tight=True)
+        pass
+    
+    if filename is not None:
+        plt.savefig(filename)
+
+    return axes
+
+
 def get_hexagonal_cell_edges_v2(bg, scale=[1,1,1]):
     """
     Compute first Brillouin zone boundary edges and vertices.
@@ -255,6 +311,8 @@ def get_uniform_k_grid_interpolate(
     coeffs_tmp = coeffs
     if band_ids is not None:
         coeffs_tmp = coeffs[band_ids,:]
+        if len(band_ids) > 1:
+            coeffs_tmp = coeffs_tmp.reshape((-1, coeffs.shape[1]))
         pass
 
     with TimerContext() as timer:
@@ -290,12 +348,26 @@ def get_uniform_nk_interpolate(
     return get_uniform_k_grid_interpolate(data, equivalences, coeffs, nk1, nk2, nk3, K_grid, band_ids)
     
 
+def get_view_point(angle_deg, x_scale, zpoint):
+    theta=np.radians(angle_deg)
+    viewx, viewy = np.array([np.cos(theta), np.sin(np.radians(180)-theta)]) * x_scale
+    viewz = zpoint
+    return [viewx, viewy, viewz]
 
 
 def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1), 
                  at_kz=0, fig=None, edges=None, plane_at_z=None,
                  high_sym_points_dots=True, high_sym_points_label=True,
-                 aspect_ratio=(1,1,0.7),
+                 aspect_ratio=(1,1,0.7), N_copies=6, 
+                 xrange=None, yrange=None, zrange=None, tick_dict={
+                     'xtickvals' : [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3],
+                     'xticktext' : [f"{a:.2f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]],
+                     'ytickvals' : [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3],
+                     'yticktext' : [f"{a:.2f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]],
+                     'ztickvals' : [-0.15, -0.12, -0.09, -0.06, -0.03, 0, 0.03],
+                     'zticktext' : [f"{a:.2f}" for a in [-0.15, -0.12, -0.09, -0.06, -0.03, 0, 0.03]],
+                 },
+                 view_point=None,
                  color_bar_dict={
     'text' : (
                         '(1/<i>m</i><sub>xx</sub><sup>*</sup> + '
@@ -324,6 +396,11 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                             [1.0, "rgb(180, 0, 0)"]       # deep red
                     ]
                     you can use jet, viridis and any color in plotly.express.colors.named_colorscales()
+    aspect_ratio  :
+    N_copies      : default 6, for k1, k2, k3  computed in the range [0,1).
+                 If range of fractional k's are [-0.5,0.5) then it should be 3. for hexagonal system
+    view_point    : default None, camera view point as a list of 3 element
+
     
     """
     if fig is None:
@@ -332,19 +409,13 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
 
 
     # KX_bz, KY_bz = rotate_z(KX_bz, KY_bz, 30)
-    for i in range(6):
+    for i in range(N_copies):
         fig.add_trace(go.Surface(
             x=KX_bz, y=KY_bz, z=Energy,
             name='Band',
             surfacecolor=surface_color,   # color = some other function
             # colorscale='RdBu_r',
-            colorscale=[
-                [0.0, "rgb(0, 0, 180)"],      # deep blue
-                [0.35, "rgb(120, 170, 255)"], # light blue
-                [0.5, "rgb(255, 255, 255)"],  # white at center
-                [0.65, "rgb(255, 120, 120)"], # light red
-                [1.0, "rgb(180, 0, 0)"]       # deep red
-        ],
+            colorscale=colorscale,
             showscale=(i==0),
             # colorbar=dict(title=r'$(\frac{1}{m^*_{xx}} + \frac{1}{m^*_{yy}})/2$', x=0.9),
             # colorbar=dict(title=r'(1/mxx + 1/myy)/2', x=0.9),
@@ -433,7 +504,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
             x_edges.extend(seg['x'] + [None])
             y_edges.extend(seg['y'] + [None])
             z_edges.extend(seg['z'] + [None])
-
+            pass
 
         fig.add_trace(
             go.Scatter3d(
@@ -545,10 +616,52 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                 )
             )
 
+    if view_point is None or len(view_point) != 3:
+        theta=np.radians(50)
+        viewx, viewy = np.array([np.cos(theta), np.sin(np.radians(180)-theta)]) * 2.4
+        viewz = 1.34
+        viewz = 2.1
+        view_point = get_view_point(50, 2.4, 2.1)
+        pass
 
-    theta=np.radians(50)
-    viewx, viewy = np.array([np.cos(theta), np.sin(np.radians(180)-theta)]) * 2.24
-    viewz = 1.34
+    # numTicks = 7
+    # if xrange is None:
+    #     xrange=[-0.3, 0.3]
+    # if xtickvals is None:
+    #     xtickvals = [a for a in np.linspace(xrange[0], xrange[1], numTicks)]
+
+    # if yrange is None:
+    #     yrange=[-0.3, 0.3]
+    # if ytickvals is None:
+    #     ytickvals = [a for a in np.linspace(yrange[0], yrange[1], numTicks)]
+    # if yticktext is None:
+    #     yticktext = [f"{a:.2f}" for a in ytickvals]
+
+    # xtickvals=None, ytickvals=None, ztickvals=None,
+
+    # if zrange is None:
+    #     zrange=[-0.15, 0.02]
+    # if ztickvals is None:
+    #     ztickvals = [a for a in np.linspace(zrange[0], zrange[1], numTicks)]
+
+    tick_dict_keys = tick_dict.keys()
+    if 'xtickvals' not in tick_dict_keys:
+        tick_dict['xtickvals'] = [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]
+    if 'ytickvals' not in tick_dict_keys:
+        tick_dict['ytickvals'] = [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]
+    if 'ztickvals' not in tick_dict_keys:
+        tick_dict['ztickvals'] = [-0.15, -0.12, -0.09, -0.06, -0.03, 0, 0.03]
+
+    if 'xticktext' not in tick_dict_keys:
+        tick_dict['xticktext'] = [f"{a:.2f}" for a in tick_dict['xtickvals']]
+    if 'yticktext' not in tick_dict_keys:
+        tick_dict['yticktext'] = [f"{a:.2f}" for a in tick_dict['ytickvals']]
+    if 'zticktext' not in tick_dict_keys:
+        tick_dict['zticktext'] = [f"{a:.2f}" for a in tick_dict['ztickvals']]
+        pass
+    print(tick_dict)
+
+
     fig.update_layout(
 
         # ==========================================================
@@ -591,7 +704,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     ),
                 ),
 
-                range=[-0.3, 0.3],
+                range=xrange,
                 autorange=False,
 
                 tickfont=dict(
@@ -600,13 +713,13 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     color='black',
                 ),
 
-                nticks=7,
-                tickvals=[-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3],
-                ticktext=[f"{a:.1f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]],
+                nticks=len(tick_dict['xtickvals']),
+                tickvals=tick_dict['xtickvals'],
+                ticktext=tick_dict['xticktext'],
 
                 showgrid=True,
                 gridcolor='lightgray',
-                gridwidth=1,
+                gridwidth=2,
 
                 showline=True,
                 linecolor='black',
@@ -614,7 +727,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
 
                 zeroline=False,
 
-                ticks='outside',
+                ticks='inside',
                 ticklen=5,
                 tickwidth=1.5,
 
@@ -634,7 +747,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     ),
                 ),
 
-                range=[-0.3, 0.3],
+                range=yrange,
                 autorange=False,
 
                 tickfont=dict(
@@ -643,13 +756,13 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     color='black',
                 ),
 
-                nticks=7,
-                tickvals=[-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3],
-                ticktext=[f"{a:.1f}" for a in [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]],
+                nticks=len(tick_dict['ytickvals']),
+                tickvals=tick_dict['ytickvals'],
+                ticktext=tick_dict['yticktext'],
 
                 showgrid=True,
                 gridcolor='lightgray',
-                gridwidth=1,
+                gridwidth=2,
 
                 showline=True,
                 linecolor='black',
@@ -657,7 +770,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
 
                 zeroline=False,
 
-                ticks='outside',
+                ticks='inside',
                 ticklen=5,
                 tickwidth=1.5,
 
@@ -677,7 +790,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     ),
                 ),
 
-                range=[-0.202, 0.1],
+                range=zrange,
                 autorange=False,
 
                 tickfont=dict(
@@ -686,13 +799,13 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
                     color='black',
                 ),
 
-                nticks=9,
-                tickvals=[-0.15, -0.1, -0.05, 0, 0.05, 0.1],
-                ticktext=[f"{a:.2f}" for a in [-0.15, -0.1, -0.05, 0, 0.05, 0.1]],
+                nticks=len(tick_dict['ztickvals']),
+                tickvals=tick_dict['ztickvals'],
+                ticktext=tick_dict['zticktext'],
 
                 showgrid=True,
                 gridcolor='lightgray',
-                gridwidth=1,
+                gridwidth=3,
 
                 showline=True,
                 linecolor='black',
@@ -700,7 +813,7 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
 
                 zeroline=False,
 
-                ticks='outside',
+                ticks='inside',
                 ticklen=5,
                 tickwidth=1.5,
 
@@ -727,9 +840,9 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
             # ------------------------------------------------------
             camera=dict(
                 eye=dict(
-                    x=viewx,
-                    y=viewy,
-                    z=viewz,
+                    x=view_point[0],
+                    y=view_point[1],
+                    z=view_point[2],
                 ),
 
                 center=dict(
@@ -802,6 +915,25 @@ def plot_E_kx_ky(KX_bz, KY_bz, Energy, surface_color, color_range=(-1,1),
     return fig
 
 
+def plot_curves_on_surface(fig, x1, y1, z1, colordict=dict(color="#61e639", width=6)):
+    """
+    plotting curves on the 3D surface
+    """
+
+    curve1_trace = go.Scatter3d(
+        x=x1, y=y1, z=z1,
+        mode='lines',
+        line=colordict,
+        #name='Curve 1: x=t, y=t',
+        showlegend=False,
+        hovertemplate='x: %{x:.2f}<br>y: %{y:.2f}<br>z: %{z:.3f}<extra></extra>'
+    )
+    fig.add_trace(
+        curve1_trace
+    )
+
+    return fig
+
 
 def add_annotations(fig, E_label=None, at_kz=None):
     """
@@ -819,7 +951,7 @@ def add_annotations(fig, E_label=None, at_kz=None):
             showarrow=False,
             font=dict(
                 family='Times New Roman',
-                size=26,
+                size=30,
                 color='black',
             ),
         )
@@ -842,10 +974,11 @@ def add_annotations(fig, E_label=None, at_kz=None):
     return fig
 
 
+
 def update_layout_for_kx_ky_plane(fig):
     """
     When only the 2D view (kx-ky) plane is needed, 
-    this method is helpful
+    this method is helpful to view from the z axis
     """
     fig.update_layout(
         # ==========================================================
@@ -906,7 +1039,7 @@ def update_layout_for_kx_ky_plane(fig):
 
                 ticks='outside',
                 ticklen=5,
-                tickwidth=1.5,
+                tickwidth=0.01,
 
                 backgroundcolor='white',
             ),
@@ -932,7 +1065,7 @@ def update_layout_for_kx_ky_plane(fig):
 
                 showgrid=True,
                 gridcolor='lightgray',
-                gridwidth=1,
+                gridwidth=2,
 
                 showline=True,
                 linecolor='black',
@@ -963,7 +1096,7 @@ def update_layout_for_kx_ky_plane(fig):
 
                 # showgrid=True,
                 gridcolor='lightgray',
-                gridwidth=1,
+                gridwidth=2,
 
                 showline=True,
                 linecolor='black',
@@ -1358,6 +1491,8 @@ def extract_kpath_interpolate(
     coeffs_tmp = coeffs
     if band_ids is not None:
         coeffs_tmp = coeffs[band_ids,:]
+        if len(band_ids) > 1:
+            coeffs_tmp = coeffs_tmp.reshape((-1, coeffs.shape[1]))
         pass
 
     kpaths = parse_k_path(kpath_list)
@@ -1385,7 +1520,12 @@ def extract_kpath_interpolate(
 
 
 
-def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints_list, labels, efermi, band_color='blue', filename=None):
+def plot_and_save_bands_velocity_imass(energy, velocity, curvature,
+                                    ib, nkpoints_list, labels,
+                                    efermi, band_color='blue',
+                                    filename=None,
+                                    ylimits=(None, None, None)
+                                       ):
     fig, axes = plt.subplots(3, len(energy), figsize=(15, 6), sharey="row", gridspec_kw={
         "width_ratios": nkpoints_list,
         "wspace":0,
@@ -1402,14 +1542,21 @@ def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints
         if k == 0:
             ax.set_ylabel(r"$E-E_F (Ha)$")
         ax.set_xlabel(f"{labels[k]}")
-        ax.set_ylim(-0.015, 0.015)
+        if ylimits[0] is None:
+            ax.set_ylim(-0.015, 0.015)
+        else:
+            ax.set_ylim(ylimits[0])
 
 
         ax = axes[1, k]
         ax.plot(x, velocity[k][0, ib].T, label="vx")
         ax.plot(x, velocity[k][1, ib].T, label="vy")
         ax.plot(x, velocity[k][2, ib].T, label="vz")
-        ax.set_ylim(-0.15, 0.15)
+        if ylimits[1] is None:
+            ax.set_ylim(-0.15, 0.15)
+        else:
+            ax.set_ylim(ylimits[1])
+        
 
         if k == 6:
             ax.legend(framealpha=0.3)
@@ -1427,7 +1574,11 @@ def plot_and_save_bands_velocity_imass(energy, velocity, curvature, ib, nkpoints
         ax.plot(x, curvature[k][0,1, ib].T, label="xy")
         ax.plot(x, curvature[k][0,2, ib].T, label="xz")
         ax.plot(x, curvature[k][1,2, ib].T, label="yz")
-        ax.set_ylim(-0.15, 0.15)
+        if ylimits[2] is None:
+            ax.set_ylim(-0.15, 0.15)
+        else:
+            ax.set_ylim(ylimits[2])
+        
 
         ax.axhline(0, 0, 10, color='k', linestyle=":")
         if k == 6:
