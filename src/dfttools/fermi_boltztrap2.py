@@ -20,6 +20,207 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 
+def format_a1(fig):
+
+    ###### E labels
+    fig.add_annotation(
+                text='<i>-0.06</i>',
+                x=0.145,
+                y=0.32,
+                xref='paper',
+                yref='paper',
+                textangle=-15,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+    fig.add_annotation(
+                text='<i>-0.02</i>',
+                x=0.12,
+                y=0.52,
+                xref='paper',
+                yref='paper',
+                textangle=-15,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+    fig.add_annotation(
+                text='<i>0.02</i>',
+                x=0.1,
+                y=0.75,
+                xref='paper',
+                yref='paper',
+                textangle=-15,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+
+    fig.add_annotation(
+                text='<i>k</i><sub>y</sub>',
+                x=0.2,
+                y=0.11,
+                xref='paper',
+                yref='paper',
+                textangle=50,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=35,
+                    color='black',
+                ),
+            )
+
+
+    fig.add_annotation(
+                text='<i>-0.2</i>',
+                x=0.185,
+                y=0.255,
+                xref='paper',
+                yref='paper',
+                textangle=-25,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+
+    fig.add_annotation(
+                text='<i>0.0</i>',
+                x=0.25,
+                y=0.16,
+                xref='paper',
+                yref='paper',
+                textangle=-25,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+
+    fig.add_annotation(
+                text='<i>0.2</i>',
+                x=0.355,
+                y=0.05,
+                xref='paper',
+                yref='paper',
+                textangle=-25,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+    fig.add_annotation(
+                text='<i>k</i><sub>x</sub>',
+                x=0.735,
+                y=0.025,
+                xref='paper',
+                yref='paper',
+                textangle=-40,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=35,
+                    color='black',
+                ),
+            )
+
+    fig.add_annotation(
+                text='<i>0.2</i>',
+                x=0.54,
+                y=0.00,
+                xref='paper',
+                yref='paper',
+                textangle=50,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+
+    fig.add_annotation(
+                text='<i>0.0</i>',
+                x=0.64,
+                y=0.08,
+                xref='paper',
+                yref='paper',
+                textangle=50,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+
+    fig.add_annotation(
+                text='<i>-0.2</i>',
+                x=0.795,
+                y=0.155,
+                xref='paper',
+                yref='paper',
+                textangle=50,
+                showarrow=False,
+                font=dict(
+                    family='Times New Roman',
+                    size=32,
+                    color='black',
+                ),
+            )
+
+
+    fig.update_layout(
+        # margin=dict(
+        #     l=0,
+        #     r=0,
+        #     b=50,
+        #     t=10,
+        # ),
+        scene=dict(
+            xaxis=dict(
+                showticklabels=False,
+                title=dict(
+                    text='',
+                ),
+                tickfont=dict(size=19), ticklen=7, tickwidth=1),
+            yaxis=dict(
+                showticklabels=False,
+                title=dict(
+                    text='',
+                ),
+                tickfont=dict(size=19), ticklen=7, tickwidth=1),
+            zaxis=dict(
+                showticklabels=False,
+                tickfont=dict(size=19), ticklen=7, tickwidth=1),
+        )
+    )
+    return fig
 
 
 def plot_high_sym_kz_btp_bands(energy, ib, nkpoints_list, labels, efermi,

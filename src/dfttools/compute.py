@@ -277,6 +277,123 @@ def dos_TDF_compute(dft_data_dir, bt2filnam, niter):
 
 
 
+def dos_TDF_compute_band_resolved(data, equivalences, coeffs, band_ids=None):
+    """
+    
+    """
+    coeffs_tmp = coeffs
+    if band_ids is not None:
+        coeffs_tmp = coeffs[band_ids,:]
+        pass
+
+    lattvec = data.get_lattvec()
+    eband, vvband, cband = fite.getBTPbands(
+        equivalences, coeffs_tmp, lattvec, curvature=False
+    )
+
+    
+    erange = np.array([-5,5])*units.eV + data.fermi
+    Cepsilon, Cdos, Cvvdos, cdos = BL.BTPDOS(eband, vvband, npts=n_bins, erange=erange)
+
+
+    const = 1.0
+    Mvvdos = const * Cvvdos/Cdos
+    Mvvdos[np.isnan(Mvvdos)] = 0.0
+
+
+    # Unit conversion to eV
+    energy = (Cepsilon - Efermi_DFT)/units.eV
+    DOS = Cdos * units.eV
+    TDF_CRTA = Cvvdos
+    TDF_IDOS = Cvvdos / DOS
+    
+
+    np.savetxt(dft_data_dir + signature + "_DOS.csv", np.c_[energy, DOS], 
+            delimiter=",",
+            header="#(E-E_F) [eV], DOS [eV^-1], {}bins in range [-5,5] eV, m={} interpolation. {}".format(n_bins, niter, signature))
+
+
+    np.savetxt(dft_data_dir + signature + "_TDF_ib{}_CRTA.csv", np.c_[energy,TDF_CRTA[0,0,:],TDF_CRTA[1,1,:],TDF_CRTA[2,2,:]], 
+            delimiter=",",
+            header="#(E-E_F) [eV], TDF_xx, TDF_yy, TDF_zz, for CRTA, {}bins in range [-5,5] eV, m={} interpolation. {}".format(n_bins, niter, signature))
+
+    np.savetxt(dft_data_dir + signature + "_TDF_IDOS.csv", np.c_[energy,TDF_IDOS[0,0,:],TDF_IDOS[1,1,:],TDF_IDOS[2,2,:]], 
+            delimiter=",",
+            header="#(E-E_F) [eV], TDF_xx, TDF_yy, TDF_zz, for Inverse DOS, {}bins in range [-5,5] eV, m={} interpolation. {}".format(n_bins, niter, signature))
+
+
+
+
+
+    # Plot settings
+    xmin, xmax = -0.4, 0.4
+
+    fig, axes = plt.subplots(
+        4, 1,
+        figsize=(8, 10),
+        sharex=True,
+        gridspec_kw={"hspace": 0.05}
+    )
+
+    # DOS
+    axes[0].plot(energy, DOS, lw=1.5)
+    axes[0].set_ylabel("DOS")
+    axes[0].axvline(0, linestyle="--", linewidth=1)
+
+    # TDF_xx
+    axes[1].plot(energy, TDF_CRTA[0, 0,:], lw=1.5, label="CRTA")
+    axes[1].plot(energy, TDF_IDOS[0, 0,:], lw=1.5, label="IDOS")
+    axes[1].set_ylabel(r"TDF$_{xx}$")
+    axes[1].axvline(0, linestyle="--", linewidth=1)
+
+    # TDF_yy
+    axes[1].plot(energy, TDF_CRTA[1, 1, :], lw=1.5, label="CRTA")
+    axes[1].plot(energy, TDF_IDOS[1, 1, :], lw=1.5, label="IDOS")
+    axes[2].set_ylabel(r"TDF$_{yy}$")
+    axes[2].axvline(0, linestyle="--", linewidth=1)
+
+    # TDF_zz
+    axes[1].plot(energy, TDF_CRTA[2, 2, :], lw=1.5, label="CRTA")
+    axes[1].plot(energy, TDF_IDOS[2, 2, :], lw=1.5, label="IDOS")
+    axes[3].set_ylabel(r"TDF$_{zz}$")
+    axes[3].set_xlabel("Energy (eV)")
+    axes[3].axvline(0, linestyle="--", linewidth=1)
+
+    # Common x-range
+    axes[3].set_xlim(xmin, xmax)
+
+    plt.tight_layout()
+    plt.savefig(fig_out_dir + "dos_TDF.png")
+
+
+
+
+def get_sigma_in_unit(data, sigma):
+    """
+    returns electrical conductivity in unit : 1/(Ohm. meter. sec)
+    """
+    vuc = data.get_volume()
+    return sigma*2/(units.Siemens / (units.Meter * units.Second)) / vuc
+
+
+def convert_L0_unit(data, L0):
+    """
+    using boltztrap L0. so factor 2 does not appear here
+    returns electrical conductivity in unit : 1/(Ohm. meter. sec)
+    """
+    vuc = data.get_volume()
+    return L0/(units.Siemens / (units.Meter * units.Second)) / vuc
+
+
+def convert_L1_unit(data, L1):
+    """
+    returns electrical conductivity in unit : 1/(Ohm. meter. sec)
+    """
+    vuc = data.get_volume()
+    return L1/(units.Volt * units.Siemens / (units.Meter * units.Second)) / vuc
+
+
+
 if __name__ == "__main__":
 
     dos_TDF_compute(dft_data_dir, bt2filnam, niter)

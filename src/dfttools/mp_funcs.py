@@ -1,7 +1,7 @@
 from mp_api.client import MPRester
 import math
 from pymatgen.core import Element
-from pymatgen.ext.matproj import MPRester
+# from pymatgen.ext.matproj import MPRester # Use mp_api for full support
 from pymatgen.electronic_structure.plotter import BSPlotter, DosPlotter, BSDOSPlotter
 import matplotlib.pyplot as plt
 from pymatgen.electronic_structure.core import Spin
@@ -36,8 +36,11 @@ class MPHelper:
 
             # List of labels and coordinates
             # print(kpath.kpath["kpoints"])
-            self.asp_links = mpr.get_download_info([material_id])
-            print("asp_links ", self.asp_links)
+            try:
+                self.asp_links = mpr.get_download_info([material_id])
+                print("asp_links ", self.asp_links)
+            except:
+                self.asp_links = None
             pass
          
     def get_task_doc(self, taskid):
@@ -50,6 +53,8 @@ class MPHelper:
         
         
     def get_vasprunxml(self):
+        if self.asp_links is None:
+            print("maybe vasprunxml is not available")
         print(self.asp_links[0].keys())
         for key in self.asp_links[0].keys():
             print(type(self.asp_links[0][key]))

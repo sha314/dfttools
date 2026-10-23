@@ -69,9 +69,9 @@ def parse_profjwc_xml(xml_path):
 
     data = {}
 
-    eigenstates = root.find('.//EIGENSTATES')
+    eigenstates = root.find('.//EIGENSTATES') # the first appearence of EIGENSTATES
 
-    header = root.find(".//HEADER")
+    header = root.find(".//HEADER") # the first appearence of HEADER
     header = header.items()
     NUMBER_OF_BANDS = int(header[0][1])
     NUMBER_OF_KPOINTS = int(header[1][1])
@@ -87,15 +87,21 @@ def parse_profjwc_xml(xml_path):
     data['nelec'] = NUMBER_OF_ELECTRONS
     data['efermi'] = FERMI_ENERGY
 
+    print("NUMBER_OF_BANDS            ", NUMBER_OF_BANDS)
+    print("NUMBER_OF_KPOINTS          ", NUMBER_OF_KPOINTS)
+    print("NUMBER_OF_SPIN_COMPONENTS  ", NUMBER_OF_SPIN_COMPONENTS)
+    print("NUMBER_OF_ATOMIC_WFC       ", NUMBER_OF_ATOMIC_WFC)
+    print("NUMBER_OF_ELECTRONS        ", NUMBER_OF_ELECTRONS)
+    print("If Spin=2 then first half kpoints and ebands will contain spin up and 2nd half spin down")
 
-    kpoints = eigenstates.findall("K-POINT")
+    kpoints = eigenstates.findall("K-POINT") # Includes both up and down spin
     kpoint_list = list(map(lambda kpt: [float(x) for x in kpt.text.split()], kpoints))
 
     kpoint_list = np.array(kpoint_list)
     data['kpoints'] = kpoint_list
 
 
-    elist = eigenstates.findall("E")
+    elist = eigenstates.findall("E") # Includes both up and down spin
     e_list = list(map(lambda ee: [float(x) for x in ee.text.split()], elist))
     e_list = np.array(e_list)
     data['ebands'] = e_list
@@ -103,21 +109,29 @@ def parse_profjwc_xml(xml_path):
 
 
     projwfc_all_k = eigenstates.findall("PROJS")
-    proj_data = dict()
+    proj_data_up = dict()
+    proj_data_dw = dict()
     for ik, proj in enumerate(projwfc_all_k):
-        proj_data[ik] = dict()
+        proj_data = dict()
         wfcs = proj.findall("ATOMIC_WFC")
         for iwfc, wfc in enumerate(wfcs):
+            spin_index = int(wfc.get("spin")) # 1 means up and 2 means down
             text = wfc.text
             ab_list = [float(x) for x in text.split()]
             len(ab_list)
             prob = [ab_list[i]**2 + ab_list[i+1]**2 for i in range(0, len(ab_list), 2)]
             len(prob)
-            proj_data[ik][iwfc+1] = prob
+            proj_data[iwfc+1] = np.array(prob)
             pass
+        if spin_index == 1:
+            proj_data_up[ik] = proj_data
+        elif spin_index == 2:
+            proj_data_dw[ik] = proj_data
+        else:
+            print("undefined spin index")
         pass
 
-    return data, proj_data
+    return data, proj_data_up, proj_data_dw
 
 
 
