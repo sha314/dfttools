@@ -17,7 +17,7 @@ material_id = "mp-12627" # Nb3S4, hexagonal
 
 # material_id = "mp-66" # for diamond
 
-material_id = "mp-13" # for diamond
+material_id = "mp-13" # for Fe bcc
 
 mp.get_material_info(material_id)
 
