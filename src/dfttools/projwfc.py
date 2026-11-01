@@ -2,7 +2,7 @@ import numpy as np
 
 from dfttools import compute, units, fermi_boltztrap2
 import xml.etree.ElementTree as ET
-
+import re
 
 
 def parse_projwfc_log(projwfc_log_file):
@@ -45,10 +45,19 @@ def parse_projwfc_log(projwfc_log_file):
     print("Format: # wfc, atom, atom_symbol, wfc, l, m")
     wfc_list = []
     for elm in wfc_labesl:
-        line = elm.split()
+        # line = elm.split()
         # print(line)
-        wfc_list.append([int(line[2].split(':')[0]), int(line[4]), line[5].split('(')[1], int(line[8]),
-                        int(line[9].split('=')[1]), int(line[11].split(')')[0])])
+        # wfc_list.append([int(line[2].split(':')[0]), int(line[4]), line[5].split('(')[1], int(line[8]),
+        #                 int(line[9].split('=')[1]), int(line[11].split(')')[0])])
+
+        ## Better method for systems with too many atoms, like supercell
+        # print(elm)
+        splits = re.split(r'[#:(), =]', elm)
+        splits=[b for b in splits if b is not '']
+        # print(splits)
+        # print(splits[1], splits[3], splits[4], splits[6], splits[8], splits[10])
+        wfc_list.append([int(splits[1]), int(splits[3]), splits[4], int(splits[6]), int(splits[8]), int(splits[10])])
+        
         pass
 
     return wfc_list
